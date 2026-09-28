@@ -127,7 +127,7 @@ export default function HoyScreen() {
             <Text variant="caption" color="muted">
               {dayLabel(last.date, today)}
             </Text>
-            <View style={{ flexDirection: "row", gap: space.xl }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: space.xl, rowGap: space.xs }}>
               <View>
                 <Text variant="heading" tabular>
                   {fmtKm(last.distanceM)} <Text variant="caption" color="muted">km</Text>
@@ -140,7 +140,7 @@ export default function HoyScreen() {
               </View>
               <View>
                 <Text variant="heading" tabular>
-                  {fmtPace(avgPace(last))} <Text variant="caption" color="muted">/km</Text>
+                  {last.distanceM > 0 ? fmtPace(avgPace(last)) : "—"} <Text variant="caption" color="muted">/km</Text>
                 </Text>
               </View>
             </View>

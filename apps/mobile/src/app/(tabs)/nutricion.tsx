@@ -140,9 +140,10 @@ export default function NutricionScreen() {
             { value: "week", label: "Semana" },
           ]}
         />
-        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+        {/* Con «Ganar masa muscular» la etiqueta y el texto no caben en una línea: bajan a la siguiente. */}
+        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm, rowGap: space.xs }}>
           <Badge label={`Objetivo: ${GOAL_LABEL[goal]}`} tone="brand" icon="flag-outline" />
-          <Text variant="caption" color="faint">
+          <Text variant="caption" color="faint" style={{ flexShrink: 1 }}>
             Calculado para ti · editable
           </Text>
         </View>

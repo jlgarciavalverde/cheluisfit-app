@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { LineChart } from "@/components/charts/LineChart";
-import { Button, Card, Chip, EmptyState, IconButton, Overline, Section, Text, TextField } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, IconButton, Overline, Section, Text, TextField, ChipRow } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useNutrition } from "@/data/store";
 import { addDays, dayLabel, shortDayLabel, todayKey } from "@/domain/dates";
@@ -45,11 +45,12 @@ export default function MeasurementsScreen() {
     <Screen variant="form" testID="screen-medidas">
       <ScreenHeader title="Medidas corporales" back />
       <View style={{ gap: space.lg }}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+        {/* Filtro de zona: misma fila de chips que el resto de filtros (desplazable en el móvil). */}
+        <ChipRow>
           {MEASUREMENT_KINDS.map((k) => (
             <Chip key={k} testID={`kind-${k}`} label={MEASUREMENT_LABEL[k]} selected={kind === k} onPress={() => setKind(k)} />
           ))}
-        </View>
+        </ChipRow>
 
         <Card style={{ gap: space.md }}>
           <View>

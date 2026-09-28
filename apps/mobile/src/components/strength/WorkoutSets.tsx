@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { fmtKg } from "@/domain/format";
 import {
   type EffortMode,
@@ -12,7 +12,7 @@ import {
   type WorkoutExercise,
 } from "@/domain/strength";
 import { useTheme } from "@/theme/ThemeProvider";
-import { space } from "@/theme/tokens";
+import { interaction, space } from "@/theme/tokens";
 import { Badge } from "../ui/Badge";
 import { Card } from "../ui/Card";
 import { Text } from "../ui/Text";
@@ -82,7 +82,7 @@ export function WorkoutSets({
                     borderTopColor: c.border,
                   }}
                 >
-                  <View style={{ width: 30, alignItems: "center" }}>
+                  <View style={{ minWidth: 30, alignItems: "center" }}>
                     {l.badge ? <Badge label={`${l.badge}${l.dropIndex > 1 ? l.dropIndex : ""}`} tone={l.badge === "W" ? "warning" : l.badge === "F" ? "danger" : "neutral"} /> : (
                       <Text variant="bodyStrong" color="muted" tabular>
                         {l.label}
@@ -101,9 +101,18 @@ export function WorkoutSets({
                 </View>
               );
               return onEditSet ? (
-                <Text key={s.id} accessibilityRole="button" accessibilityLabel={`Editar serie ${l.label}`} onPress={() => onEditSet(exIdx, s)} testID={`edit-set-${exIdx}-${i}`}>
+                // `Pressable`, no `<Text onPress>`: dentro de un Text la fila se maqueta en línea y
+                // los anchos/`flex` de sus columnas no se respetan.
+                <Pressable
+                  key={s.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Editar serie ${l.label}`}
+                  onPress={() => onEditSet(exIdx, s)}
+                  testID={`edit-set-${exIdx}-${i}`}
+                  style={({ pressed }) => ({ opacity: pressed ? interaction.pressedOpacity : 1 })}
+                >
                   {inner}
-                </Text>
+                </Pressable>
               ) : (
                 <View key={s.id}>{inner}</View>
               );

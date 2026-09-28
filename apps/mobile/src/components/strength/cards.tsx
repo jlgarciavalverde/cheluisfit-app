@@ -102,7 +102,7 @@ export function WorkoutCard({ workout, onPress }: { workout: Workout; onPress: (
             {["Hoy", "Ayer"].includes(rel) ? `${rel} · ${shortDayLabel(workout.date)}` : rel}
           </Text>
         </View>
-        <View style={{ flexDirection: "row", gap: space.lg }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: space.lg, rowGap: space.xs }}>
           <Text variant="caption" color="muted" tabular>
             <Text variant="bodyStrong" tabular>
               {fmtDuration(t.durationS)}

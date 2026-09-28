@@ -56,11 +56,13 @@ export function ActivityCard({
           </View>
           <Badge label={SOURCE_LABEL[activity.source]} icon={SOURCE_ICON[activity.source]} tone="neutral" />
         </View>
-        <View style={{ flexDirection: "row", gap: space.md }}>
-          <Stat style={{ flex: 1 }} value={fmtKm(activity.distanceM)} unit="km" label="Distancia" />
-          <Stat style={{ flex: 1 }} value={fmtDuration(activity.durationS)} label="Tiempo" />
-          <Stat style={{ flex: 1 }} value={fmtPace(avgPace(activity))} unit="/km" label="Ritmo" />
-          {activity.avgHr ? <Stat style={{ flex: 1 }} value={String(activity.avgHr)} unit="ppm" label="FC media" /> : null}
+        {/* Con 4 datos en un móvil estrecho no caben en una fila (un tiempo de más de una hora se
+            partía): bajan de dos en dos. */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: space.md, rowGap: space.sm }}>
+          <Stat style={{ flexGrow: 1, flexBasis: activity.avgHr ? "40%" : 0, minWidth: 0 }} value={fmtKm(activity.distanceM)} unit="km" label="Distancia" />
+          <Stat style={{ flexGrow: 1, flexBasis: activity.avgHr ? "40%" : 0, minWidth: 0 }} value={fmtDuration(activity.durationS)} label="Tiempo" />
+          <Stat style={{ flexGrow: 1, flexBasis: activity.avgHr ? "40%" : 0, minWidth: 0 }} value={activity.distanceM > 0 ? fmtPace(avgPace(activity)) : "—"} unit={activity.distanceM > 0 ? "/km" : undefined} label="Ritmo" />
+          {activity.avgHr ? <Stat style={{ flexGrow: 1, flexBasis: "40%", minWidth: 0 }} value={String(activity.avgHr)} unit="ppm" label="FC media" /> : null}
         </View>
         {template ? (
           <Text variant="caption" color="brandText">

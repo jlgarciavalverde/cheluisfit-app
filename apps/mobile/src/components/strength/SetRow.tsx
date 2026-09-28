@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 import { formatEffort, type Ghost, type SetLog, SET_TYPE_LABEL, type SetLabel } from "@/domain/strength";
 import { fmtKg, parseNum } from "@/domain/format";
+import { useSetColumns } from "./setColumns";
 import { useTheme } from "@/theme/ThemeProvider";
 import { radius, typeScale } from "@/theme/tokens";
 import { Icon } from "../ui/Icon";
@@ -45,6 +46,7 @@ function NumCell({
       placeholder={placeholder}
       placeholderTextColor={c.faint}
       keyboardType={decimal ? "decimal-pad" : "number-pad"}
+      maxFontSizeMultiplier={1.1}
       selectTextOnFocus
       editable={!done}
       onChangeText={(t) => {
@@ -111,6 +113,7 @@ export function SetRow({
   onComplete: () => void;
 }) {
   const { c } = useTheme();
+  const col = useSetColumns();
   const s = set;
   const l = label;
   const g = ghost;
@@ -121,7 +124,7 @@ export function SetRow({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: 6,
+        gap: col.gap,
         minHeight: 52,
         paddingVertical: 4,
         paddingLeft: isDrop ? 14 : 0,
@@ -140,7 +143,7 @@ export function SetRow({
         accessibilityRole="button"
         accessibilityLabel={`Serie ${l.label}${l.badge ? `, ${SET_TYPE_LABEL[s.type]}` : ""}. Cambiar tipo`}
         onPress={onTypePress}
-        style={{ width: isDrop ? 40 : 44, height: 44, alignItems: "center", justifyContent: "center" }}
+        style={{ width: isDrop ? col.serie - 4 : col.serie, height: 44, alignItems: "center", justifyContent: "center" }}
       >
         {l.badge ? (
           <View
@@ -154,13 +157,13 @@ export function SetRow({
               justifyContent: "center",
             }}
           >
-            <Text variant="control" style={{ color: c.bg }}>
+            <Text variant="control" style={{ color: c.bg }} maxFontSizeMultiplier={1.1}>
               {l.badge}
               {l.dropIndex > 1 ? l.dropIndex : ""}
             </Text>
           </View>
         ) : (
-          <Text variant="heading" tabular>
+          <Text variant="heading" tabular maxFontSizeMultiplier={1.1}>
             {l.label}
           </Text>
         )}
@@ -172,15 +175,15 @@ export function SetRow({
         accessibilityLabel={prev ? `Última vez: ${prev.kg ?? 0} kilos por ${prev.reps}. Copiar` : "Sin dato de la última vez"}
         disabled={!prev || s.done}
         onPress={onCopyPrev}
-        style={{ flex: 1, minWidth: 48, alignItems: "center", justifyContent: "center", minHeight: 44 }}
+        style={{ flex: 1, minWidth: col.prevMin, alignItems: "center", justifyContent: "center", minHeight: 44 }}
       >
-        <Text variant="caption" color="faint" tabular numberOfLines={1}>
+        <Text variant="caption" color="faint" tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.1}>
           {prev ? (kind === "duration" ? `${prev.reps} s` : kind === "bodyweight" && !prev.kg ? `${prev.reps}` : `${fmt(prev.kg)}×${prev.reps}`) : "–"}
         </Text>
       </Pressable>
 
       {hasKg ? (
-        <View style={{ width: 62 }}>
+        <View style={{ width: col.kg }}>
           <NumCell
             testID={`kg-${index}`}
             label={`Kilos de la serie ${l.label}`}
@@ -194,7 +197,7 @@ export function SetRow({
         </View>
       ) : null}
 
-      <View style={{ width: 56 }}>
+      <View style={{ width: col.reps }}>
         <NumCell
           testID={`reps-${index}`}
           label={`${kind === "duration" ? "Segundos" : "Repeticiones"} de la serie ${l.label}`}
@@ -212,7 +215,7 @@ export function SetRow({
         accessibilityLabel={`Esfuerzo de la serie ${l.label}: ${s.rpe === null ? "sin dato" : formatEffort(s.rpe, effortMode)}`}
         onPress={onEffortPress}
         style={{
-          width: 52,
+          width: col.effort,
           height: 44,
           borderRadius: radius.sm,
           alignItems: "center",
@@ -220,7 +223,7 @@ export function SetRow({
           backgroundColor: s.done ? "transparent" : c.surfaceAlt,
         }}
       >
-        <Text variant="bodyStrong" color={s.rpe === null ? "faint" : "text"} tabular>
+        <Text variant="bodyStrong" color={s.rpe === null ? "faint" : "text"} tabular maxFontSizeMultiplier={1.1}>
           {formatEffort(s.rpe, effortMode)}
         </Text>
       </Pressable>
@@ -232,7 +235,7 @@ export function SetRow({
         accessibilityLabel={`Serie ${l.label} hecha`}
         onPress={onComplete}
         hitSlop={2}
-        style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center" }}
+        style={{ width: col.done, height: 48, alignItems: "center", justifyContent: "center" }}
       >
         <View
           style={{

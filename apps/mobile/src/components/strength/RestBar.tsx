@@ -78,11 +78,11 @@ export function RestBar({ defaultRestS }: { defaultRestS: number }) {
         label={`Descanso: quedan ${left} segundos`}
       />
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: space.md, paddingVertical: space.sm }}>
-        <View style={{ minWidth: 92 }} accessibilityLiveRegion="polite">
-          <Text variant="numeralS" tabular color={over ? "success" : "text"} testID="rest-left">
+        <View style={{ width: 96 }} accessibilityLiveRegion="polite">
+          <Text variant="numeralS" tabular color={over ? "success" : "text"} testID="rest-left" numberOfLines={1} maxFontSizeMultiplier={1.2}>
             {over ? `+${fmtDuration(overtime)}` : fmtDuration(left)}
           </Text>
-          <Text variant="micro" color={over ? "success" : "muted"} tabular>
+          <Text variant="micro" color={over ? "success" : "muted"} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {over ? "terminado" : `descanso · de ${restText(rest.totalS)}`}
           </Text>
         </View>

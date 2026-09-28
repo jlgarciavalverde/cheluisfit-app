@@ -105,12 +105,16 @@ export default function SessionScreen() {
               <Card tone="alt" style={{ gap: space.sm }} testID="plan-link">
                 <Overline color="muted">Plantilla</Overline>
                 {planned ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap" }}>
-                    <Text variant="bodyStrong" style={{ flex: 1 }}>
+                  // El nombre en su línea y los botones debajo: con `flex: 1` junto a dos botones, un
+                  // nombre largo se quedaba en ~75 dp y ocupaba 5 o 6 líneas.
+                  <View style={{ gap: space.sm }}>
+                    <Text variant="bodyStrong" numberOfLines={2}>
                       {planned.name}
                     </Text>
-                    <Button label="Cambiar" variant="secondary" size="sm" onPress={() => setLinking(true)} />
-                    <Button label="Desvincular" variant="ghost" size="sm" onPress={() => linkTemplate(activity.id, null)} />
+                    <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
+                      <Button label="Cambiar" variant="secondary" size="sm" onPress={() => setLinking(true)} />
+                      <Button label="Desvincular" variant="ghost" size="sm" onPress={() => linkTemplate(activity.id, null)} />
+                    </View>
                   </View>
                 ) : (
                   <View style={{ gap: space.sm }}>

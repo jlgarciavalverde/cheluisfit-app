@@ -101,6 +101,9 @@ export const EQUIPMENT_LABEL: Record<Equipment, string> = {
 };
 
 /** Cómo se registra: peso+reps, peso corporal (con lastre opcional) o duración. */
+/** Equipamientos que se ofrecen como filtro (pestaña Ejercicios y selector de ejercicios). */
+export const EQUIPMENT_FILTERS: Equipment[] = ["barbell", "dumbbell", "machine", "cable", "bodyweight"];
+
 export type ExerciseKind = "weight_reps" | "bodyweight" | "duration";
 
 export interface Exercise {

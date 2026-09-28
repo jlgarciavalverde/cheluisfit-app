@@ -50,7 +50,9 @@ export function Stat({
         style,
       ]}
     >
-      <Text variant={VALUE[size]} color={color} tabular testID={valueTestID}>
+      {/* Una línea siempre: en columnas estrechas un tiempo como «1:23:45» se partía por la mitad.
+          En nativo se encoge hasta el 75 %; en la web, «…». */}
+      <Text variant={VALUE[size]} color={color} tabular testID={valueTestID} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.2} style={{ maxWidth: "100%" }}>
         {value}
         {unit ? (
           <Text variant={size === "sm" ? "caption" : "control"} color="muted">

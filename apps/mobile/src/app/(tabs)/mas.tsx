@@ -256,12 +256,12 @@ export default function MasScreen() {
                 value={effortMode}
                 onChange={setEffortMode}
                 options={[
-                  { value: "rir", label: "RIR (reps en reserva)" },
+                  { value: "rir", label: "RIR" },
                   { value: "rpe", label: "RPE" },
                 ]}
               />
               <Text variant="caption" color="faint">
-                Es la misma escala: RPE 9 = 1 RIR. Cambia cómo lo introduces y lo ves.
+                RIR = repeticiones que te quedaban en reserva; RPE = esfuerzo del 1 al 10. Es la misma escala (RPE 9 = 1 RIR): solo cambia cómo lo introduces y lo ves.
               </Text>
             </View>
             <View style={{ gap: space.sm }}>

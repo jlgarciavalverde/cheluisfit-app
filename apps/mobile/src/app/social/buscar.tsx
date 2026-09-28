@@ -6,6 +6,8 @@ import { Avatar } from "@/components/social/Avatar";
 import { EmptyState, ListGroup, ListRow, SearchField } from "@/components/ui";
 import { api, ApiError, type SocialUserSummary } from "@/data/api";
 import { SignedOutScreen } from "@/components/social/ScreenStates";
+import { SearchStatus } from "@/components/SearchStatus";
+import { SEARCH_DEBOUNCE_MS, SEARCH_MIN_CHARS } from "@/domain/search";
 import { useAuth } from "@/data/authStore";
 import { space } from "@/theme/tokens";
 
@@ -18,7 +20,7 @@ export default function SearchUsersScreen() {
 
   useEffect(() => {
     const q = query.trim();
-    if (!token || q.length < 2) {
+    if (!token || q.length < SEARCH_MIN_CHARS) {
       setResults(null);
       setLoading(false);
       return;
@@ -41,7 +43,7 @@ export default function SearchUsersScreen() {
         .finally(() => {
           if (!cancelled) setLoading(false);
         });
-    }, 250);
+    }, SEARCH_DEBOUNCE_MS);
     return () => {
       cancelled = true;
       clearTimeout(t);
@@ -53,12 +55,15 @@ export default function SearchUsersScreen() {
   return (
     <Screen testID="screen-buscar-personas" scroll={false}>
       <ScreenHeader title="Buscar personas" back />
-      <SearchField testID="search-users" value={query} onChangeText={setQuery} placeholder="Nombre o usuario…" autoFocus />
-      <View style={{ marginTop: space.lg, flex: 1 }}>
+      <SearchField testID="search-users" value={query} onChangeText={setQuery} placeholder="Buscar persona o usuario" autoFocus />
+      <View style={{ paddingTop: space.sm }}>
+        <SearchStatus query={query} loading={loading} count={error ? null : (results?.length ?? null)} noun={["persona", "personas"]} />
+      </View>
+      <View style={{ marginTop: space.md, flex: 1 }}>
         {error && !loading ? (
           <EmptyState icon="cloud-offline-outline" title={error} />
         ) : results === null ? (
-          <EmptyState icon="search-outline" title={loading ? "Buscando…" : "Escribe al menos 2 letras"} />
+          query.trim() ? null : <EmptyState icon="search-outline" title="Busca por nombre o por @usuario" />
         ) : results.length === 0 ? (
           <EmptyState icon="person-outline" title="Sin resultados" />
         ) : (

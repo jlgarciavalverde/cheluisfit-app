@@ -1,9 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, View } from "react-native";
 import { FullScreenModal } from "../FullScreenModal";
 import { filterExercises } from "@/data/exerciseSearch";
 import { useLibrary } from "@/data/strengthStore";
-import { type Exercise, GROUP_LABEL, GROUP_ORDER, type MuscleGroup } from "@/domain/strength";
+import { countLabel, effectiveQuery } from "@/domain/search";
+import { type Equipment, EQUIPMENT_FILTERS, EQUIPMENT_LABEL, type Exercise, GROUP_LABEL, GROUP_ORDER, type MuscleGroup } from "@/domain/strength";
+import { SearchStatus } from "../SearchStatus";
+import { Text } from "../ui/Text";
 import { space } from "@/theme/tokens";
 import { Button } from "../ui/Button";
 import { Chip } from "../ui/Chip";
@@ -40,12 +43,21 @@ export function ExercisePicker({
   const library = useLibrary();
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState<MuscleGroup | "all">("all");
+  const [equipment, setEquipment] = useState<Equipment | "all">("all");
+  // El selector sigue montado entre usos (rutina, entreno): al abrirlo, siempre empieza limpio.
+  useEffect(() => {
+    if (!visible) return;
+    setQuery("");
+    setGroup("all");
+    setEquipment("all");
+  }, [visible]);
 
+  const q = effectiveQuery(query);
   const results = useMemo(
-    () => filterExercises(library, { query, group }).filter((e) => !excludeIds.includes(e.id)),
-    [library, query, group, excludeIds],
+    () => filterExercises(library, { query: q, group, equipment }).filter((e) => !excludeIds.includes(e.id)),
+    [library, q, group, equipment, excludeIds],
   );
-  const showSuggested = !!suggested?.length && !query.trim() && group === "all";
+  const showSuggested = !!suggested?.length && !q && group === "all" && equipment === "all";
   const suggestedIds = new Set(showSuggested ? suggested!.map((e) => e.id) : []);
   const data = [
     ...(showSuggested ? [{ key: "h-sug", header: `Mismo músculo (${suggested!.length})` } as const, ...suggested!.slice(0, 8).map((e) => ({ key: `s-${e.id}`, ex: e }))] : []),
@@ -56,13 +68,27 @@ export function ExercisePicker({
   return (
     <FullScreenModal visible={visible} onClose={onClose} title={title} subtitle={subtitle} testID="exercise-picker">
       <SearchField testID="picker-search" value={query} onChangeText={setQuery} placeholder="Buscar ejercicio o músculo" />
-      <View style={{ paddingVertical: space.md }}>
+      {/* Mismos filtros y contador que la pestaña Ejercicios de Fuerza. */}
+      <View style={{ paddingVertical: space.md, gap: space.md }}>
         <ChipRow>
           <Chip label="Todos" selected={group === "all"} onPress={() => setGroup("all")} />
           {GROUP_ORDER.filter((g) => g !== "other").map((g) => (
             <Chip key={g} testID={`pick-group-${g}`} label={GROUP_LABEL[g]} selected={group === g} onPress={() => setGroup(g)} />
           ))}
         </ChipRow>
+        <ChipRow>
+          <Chip label="Cualquier equipo" icon="options-outline" selected={equipment === "all"} onPress={() => setEquipment("all")} />
+          {EQUIPMENT_FILTERS.map((e) => (
+            <Chip key={e} label={EQUIPMENT_LABEL[e]} selected={equipment === e} onPress={() => setEquipment(e)} />
+          ))}
+        </ChipRow>
+        {query.trim() ? (
+          <SearchStatus query={query} loading={false} count={results.length} noun={["ejercicio", "ejercicios"]} />
+        ) : (
+          <Text variant="caption" color="muted" numberOfLines={1}>
+            {countLabel(results.length, ["ejercicio", "ejercicios"])}
+          </Text>
+        )}
       </View>
       <FlatList
         data={data}

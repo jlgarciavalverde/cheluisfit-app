@@ -42,6 +42,9 @@ export function KcalRing({
           variant={size > 160 ? "numeralXL" : "display"}
           tabular
           testID="kcal-left"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          maxFontSizeMultiplier={1.1}
         >
           {fmtInt(Math.abs(left))}
         </Text>

@@ -1,7 +1,7 @@
 import { type TextStyle, View } from "react-native";
 import { type Palette, space } from "@/theme/tokens";
 import { Button } from "./Button";
-import { Text } from "./Text";
+import { Text, type TextProps } from "./Text";
 
 /**
  * Rótulo pequeño en mayúsculas: grupos de una lista, etiqueta dentro de una tarjeta o cabecera
@@ -12,14 +12,15 @@ export function Overline({
   color = "muted",
   header = true,
   style,
+  ...textProps
 }: {
   children: React.ReactNode;
   color?: keyof Palette;
   header?: boolean;
   style?: TextStyle;
-}) {
+} & Pick<TextProps, "numberOfLines" | "adjustsFontSizeToFit" | "maxFontSizeMultiplier">) {
   return (
-    <Text variant="label" color={color} accessibilityRole={header ? "header" : undefined} style={style}>
+    <Text variant="label" color={color} accessibilityRole={header ? "header" : undefined} style={style} {...textProps}>
       {children}
     </Text>
   );

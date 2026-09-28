@@ -2,6 +2,10 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { FlatList, View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
+import { SearchStatus } from "@/components/SearchStatus";
+import { countLabel, effectiveQuery } from "@/domain/search";
+
+const EXERCISE_NOUN = ["ejercicio", "ejercicios"] as const;
 import { ExerciseRow } from "@/components/strength/ExerciseRow";
 import { MuscleVolumeCard, RoutineCard, WorkoutCard } from "@/components/strength/cards";
 import { BottomSheet, Button, Card, ConfirmSheet, Chip, ChipRow, EmptyState, CollapsibleSection, IconButton, Overline, ResponsiveGrid, SearchField, Section, SegmentedControl, Text } from "@/components/ui";
@@ -12,6 +16,7 @@ import { useLibrary, useStrength } from "@/data/strengthStore";
 import { todayKey, weekDates } from "@/domain/dates";
 import { fmtDuration } from "@/domain/format";
 import {
+  EQUIPMENT_FILTERS,
   EQUIPMENT_LABEL,
   type Equipment,
   GROUP_LABEL,
@@ -25,7 +30,6 @@ import {
 import { space } from "@/theme/tokens";
 
 type Tab = "train" | "routines" | "exercises" | "history";
-const EQUIPMENT_FILTERS: Equipment[] = ["barbell", "dumbbell", "machine", "cable", "bodyweight"];
 
 export default function FuerzaScreen() {
   const [tab, setTab] = useState<Tab>("train");
@@ -52,7 +56,7 @@ export default function FuerzaScreen() {
   }, [sorted]);
   const suggested = useMemo(() => nextSuggestedRoutine(routines, workouts), [routines, workouts]);
   const weekSets = useMemo(() => weeklySetsByMuscle(workouts, weekDates(todayKey())), [workouts]);
-  const exercises = useMemo(() => filterExercises(library, { query, group, equipment }), [library, query, group, equipment]);
+  const exercises = useMemo(() => filterExercises(library, { query: effectiveQuery(query), group, equipment }), [library, query, group, equipment]);
 
   const begin = (r: Routine | null) => {
     start(r, library);
@@ -178,7 +182,9 @@ export default function FuerzaScreen() {
   const exercisesTab = (
     <View style={{ gap: space.md, flex: 1 }}>
       <View style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
-        <SearchField testID="ex-search" value={query} onChangeText={setQuery} placeholder="Buscar ejercicio o músculo" />
+        <View style={{ flex: 1 }}>
+          <SearchField testID="ex-search" value={query} onChangeText={setQuery} placeholder="Buscar ejercicio o músculo" />
+        </View>
         <IconButton testID="new-exercise" icon="add" label="Crear ejercicio" filled="brand" color="onBrand" onPress={() => router.push("/crear-ejercicio")} />
       </View>
       <ChipRow>
@@ -193,9 +199,13 @@ export default function FuerzaScreen() {
           <Chip key={q} label={EQUIPMENT_LABEL[q]} selected={equipment === q} onPress={() => setEquipment(q)} />
         ))}
       </ChipRow>
-      <Text variant="caption" color="muted" accessibilityLiveRegion="polite">
-        {exercises.length} ejercicios
-      </Text>
+      {query.trim() ? (
+        <SearchStatus query={query} loading={false} count={exercises.length} noun={EXERCISE_NOUN} />
+      ) : (
+        <Text variant="caption" color="muted" numberOfLines={1} accessibilityLiveRegion="polite">
+          {countLabel(exercises.length, EXERCISE_NOUN)}
+        </Text>
+      )}
       <FlatList
         style={{ flex: 1 }}
         data={exercises}

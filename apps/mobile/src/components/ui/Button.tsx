@@ -76,6 +76,10 @@ export function Button({
           justifyContent: "center",
           flexDirection: "row",
           gap: space.sm,
+          // Un texto largo (o la letra grande del sistema) se corta con «…» dentro del botón en vez
+          // de sacarlo de su tarjeta.
+          maxWidth: "100%",
+          flexShrink: 1,
           opacity: disabled && !neutral ? interaction.disabledOpacity : pressed ? interaction.pressedOpacity : 1,
         },
         fullWidth && { alignSelf: "stretch" },
@@ -87,7 +91,7 @@ export function Button({
       ) : (
         <>
           {icon && <Icon name={icon} size={size === "sm" ? "sm" : "md"} color={fg} />}
-          <Text variant={size === "sm" ? "control" : "bodyStrong"} color={fg} numberOfLines={1}>
+          <Text variant={size === "sm" ? "control" : "bodyStrong"} color={fg} numberOfLines={1} style={{ flexShrink: 1 }}>
             {label}
           </Text>
         </>

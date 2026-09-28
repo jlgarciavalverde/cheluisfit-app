@@ -60,7 +60,8 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
         >
           <Icon name={focused ? meta.active : meta.icon} size="lg" color={focused ? "brandText" : "muted"} />
         </View>
-        <Text variant="tiny" color={focused ? "brandText" : "muted"}>
+        {/* Seis pestañas en 360 dp: «Nutrición» con la letra grande se partía en dos líneas. */}
+        <Text variant="tiny" color={focused ? "brandText" : "muted"} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.2}>
           {meta.label}
         </Text>
       </Pressable>
@@ -69,6 +70,7 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
 
   return (
     <View
+      testID="app-tab-bar"
       accessibilityRole="tablist"
       style={{
         flexDirection: "row",

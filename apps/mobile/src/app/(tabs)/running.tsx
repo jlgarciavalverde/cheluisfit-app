@@ -439,41 +439,15 @@ export default function RunningScreen() {
       </Card>
       <Section kind="overline" title="Marcas" gap={space.sm}>
         {progress.prs.longest ? (
-          <Card testID="pr-longest" style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-            <Badge label={RUNNING_PR_LABEL.longest} tone="brand" />
-            <Text variant="bodyStrong" tabular style={{ flex: 1 }}>
-              {fmtKm(progress.prs.longest.distanceM)} km
-            </Text>
-            <Text variant="caption" color="muted">
-              {dayLabel(progress.prs.longest.date, today)}
-            </Text>
-          </Card>
+          <PrCard testID="pr-longest" label={RUNNING_PR_LABEL.longest} tone="brand" value={`${fmtKm(progress.prs.longest.distanceM)} km`} when={dayLabel(progress.prs.longest.date, today)} />
         ) : null}
         {progress.prs.fastest_pace ? (
-          <Card testID="pr-fastest-pace" style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-            <Badge label={RUNNING_PR_LABEL.fastest_pace} tone="success" />
-            <Text variant="bodyStrong" tabular style={{ flex: 1 }}>
-              {fmtPace(avgPace(progress.prs.fastest_pace))}/km
-            </Text>
-            <Text variant="caption" color="muted">
-              {dayLabel(progress.prs.fastest_pace.date, today)}
-            </Text>
-          </Card>
+          <PrCard testID="pr-fastest-pace" label={RUNNING_PR_LABEL.fastest_pace} tone="success" value={`${fmtPace(avgPace(progress.prs.fastest_pace))}/km`} when={dayLabel(progress.prs.fastest_pace.date, today)} />
         ) : null}
         {(["5k", "10k", "half_marathon"] as const).map((key) => {
           const a = progress.prs[key];
           if (!a) return null;
-          return (
-            <Card key={key} testID={`pr-${key}`} style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-              <Badge label={RUNNING_PR_LABEL[key]} tone="success" />
-              <Text variant="bodyStrong" tabular style={{ flex: 1 }}>
-                {fmtDuration(a.durationS)}
-              </Text>
-              <Text variant="caption" color="muted">
-                {dayLabel(a.date, today)}
-              </Text>
-            </Card>
-          );
+          return <PrCard key={key} testID={`pr-${key}`} label={RUNNING_PR_LABEL[key]} tone="success" value={fmtDuration(a.durationS)} when={dayLabel(a.date, today)} />;
         })}
       </Section>
     </View>
@@ -509,5 +483,26 @@ export default function RunningScreen() {
         }}
       />
     </Screen>
+  );
+}
+
+/**
+ * Tarjeta de una marca: la etiqueta arriba y, debajo, el valor y la fecha en una sola línea cada
+ * uno. Antes iban los tres en fila y con «Mejor media maratón» + una fecha larga el tiempo se
+ * quedaba en ~22 dp y se partía letra a letra.
+ */
+function PrCard({ label, tone, value, when, testID }: { label: string; tone: "brand" | "success"; value: string; when: string; testID?: string }) {
+  return (
+    <Card testID={testID} style={{ gap: space.xs }}>
+      <Badge label={label} tone={tone} />
+      <View style={{ flexDirection: "row", alignItems: "baseline", gap: space.md }}>
+        <Text variant="bodyStrong" tabular numberOfLines={1} style={{ flex: 1 }}>
+          {value}
+        </Text>
+        <Text variant="caption" color="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+          {when}
+        </Text>
+      </View>
+    </Card>
   );
 }

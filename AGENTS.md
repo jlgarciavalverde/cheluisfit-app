@@ -682,6 +682,35 @@ línea, un tamaño de icono numérico o una etiqueta `variant="label"` fuera de 
 | Contenido asimétrico en escritorio (mapa/tabla + panel lateral) | Patrón de `nutricion.tsx`/`sesion/[id].tsx`: `isWide ? <Row><Col w={380}/><Col flex={1}/></Row> : <Stack/>` | `ResponsiveGrid` forzado sobre contenido distinto |
 | Lista larga o sin techo (biblioteca de ejercicios, búsqueda de alimentos) | `FlatList` (ver `ExercisePicker.tsx`); con `Screen scroll={false}` el contenedor que lleva el `FlatList` necesita `flex: 1` | `ScrollView`/`.map()` sin virtualizar |
 
+**Buscadores y filtros: iguales en toda la app** (desde la 0.12.1, a petición del usuario):
+- `SearchField` tiene **alto fijo** (52), el hueco del × siempre reservado y `autoCapitalize="none"`:
+  mide lo mismo vacío, lleno, con 120 caracteres o con emojis. Ocupa el ancho de su contenedor;
+  en una fila con botones va dentro de `<View style={{ flex: 1 }}>` (nunca `flex: 1` en él mismo:
+  en una columna con altura acotada crecía en vertical).
+- Reglas comunes en `domain/search.ts`: mínimo `SEARCH_MIN_CHARS` (2) letras, espera
+  `SEARCH_DEBOUNCE_MS` (250 ms) si la búsqueda va a red (lo local es inmediato), y la línea de
+  estado `SearchStatus` («Escribe al menos 2 letras» / «Buscando…» / «1 resultado»). Buscador nuevo →
+  usar lo mismo. Filas de chips de filtro: siempre `ChipRow`.
+- `anadir.tsx` es **un solo árbol**: el buscador nunca se vuelve a montar al pasar de «sin
+  resultados» a «con resultados». `ExercisePicker` se limpia al abrirse y tiene los mismos filtros
+  y contador que la pestaña Ejercicios.
+
+**Textos que no se salen** (0.12.1): `Text` limita la letra del sistema a ×1,3 por defecto
+(`maxFontSizeMultiplier`; menos en números grandes y celdas); `Badge` nunca es más ancha que su
+contenedor y corta con «…»; `Button` encoge y corta su etiqueta; el valor de `Stat` va en una línea
+y se encoge (nativo) o corta (web); `SegmentedControl` en una línea con borde siempre presente. La
+tabla de series usa `useSetColumns()` (compacta por debajo de 380 dp: antes medía 344 dp y en un
+móvil de 360 el círculo de «hecha» se salía). Fila con texto + etiqueta/botón: el texto con
+`flex: 1` o `flexShrink: 1` (en nativo un hijo de fila **no encoge** por defecto), y si no caben
+en una línea, `flexWrap`.
+**`e2e/estres-visual.spec.ts`** lo comprueba midiendo el DOM a 360 y 390 dp con nombres de 70
+caracteres, números grandes y las tres fuentes de actividad: sin scroll horizontal, ningún texto
+fuera de la pantalla ni encima de otro (lo que pasa bajo la barra de pestañas o detrás de un modal
+no cuenta), y los buscadores del mismo tamaño escribas lo que escribas. Tiene un test de control
+que mete un solape a propósito para asegurar que el detector no aprueba siempre. Capturas en
+`test-results/estres/`. Lo que **no** cubre: la letra del sistema al 130 % (en la web no se puede
+simular; probar en el móvil con `adb shell settings put system font_scale 1.3`).
+
 **Guía de textos**: pantallas de creación se titulan «Nuevo/Nueva X», las de edición «Editar X»
 («Corregir datos» cuando es una corrección de un dato ajeno, no una edición propia). El botón
 final dice «Crear X» al crear o «Guardar cambios» al editar. «Añadir» es poner algo en una

@@ -16,6 +16,7 @@ import { haptic } from "../ui/haptics";
 import { Icon } from "../ui/Icon";
 import { Overline } from "../ui/Section";
 import { Text } from "../ui/Text";
+import { useSetColumns } from "./setColumns";
 import { SetRow } from "./SetRow";
 import { EffortSheet, TypeSheet } from "./SetsTableSheets";
 
@@ -76,29 +77,31 @@ export function SetsTable({
     completeSet(exIdx, s.id, { kg: g?.kg ?? null, reps: g?.reps ?? null });
   };
 
+  const col = useSetColumns();
   const colKg = kind === "bodyweight" ? "+KG" : "KG";
   const colReps = kind === "duration" ? "SEG" : "REPS";
 
   return (
     <View testID="sets-table" style={{ gap: space.xs }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 2 }}>
-        <Overline color="faint" header={false} style={{ width: 44, textAlign: "center" }}>SERIE</Overline>
-        <Overline color="faint" header={false} style={{ flex: 1, textAlign: "center" }}>ANTERIOR</Overline>
+      {/* Mismos anchos que cada fila (`useSetColumns`), con el borde de 1 px de la fila incluido. */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: col.gap, paddingLeft: 1, paddingRight: 3 }}>
+        <Overline color="faint" header={false} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.1} style={{ width: col.serie, textAlign: "center" }}>SERIE</Overline>
+        <Overline color="faint" header={false} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.1} style={{ flex: 1, minWidth: col.prevMin, textAlign: "center" }}>ANTERIOR</Overline>
         {hasKg ? (
-          <Overline color="faint" header={false} style={{ width: 62, textAlign: "center" }}>{colKg}</Overline>
+          <Overline color="faint" header={false} numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ width: col.kg, textAlign: "center" }}>{colKg}</Overline>
         ) : null}
-        <Overline color="faint" header={false} style={{ width: 56, textAlign: "center" }}>{colReps}</Overline>
+        <Overline color="faint" header={false} numberOfLines={1} maxFontSizeMultiplier={1.1} style={{ width: col.reps, textAlign: "center" }}>{colReps}</Overline>
         <Pressable
           testID="effort-mode"
           accessibilityRole="button"
           accessibilityLabel={`Escala de esfuerzo: ${effortMode.toUpperCase()}. Cambiar`}
           onPress={() => setEffortMode(effortMode === "rir" ? "rpe" : "rir")}
-          style={{ width: 52, height: 28, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 2 }}
+          style={{ width: col.effort, height: 28, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 2 }}
         >
-          <Overline color="brandText" header={false}>{effortMode.toUpperCase()}</Overline>
+          <Overline color="brandText" header={false} maxFontSizeMultiplier={1.1}>{effortMode.toUpperCase()}</Overline>
           <Icon name="swap-horizontal" size="xs" color="brandText" />
         </Pressable>
-        <View style={{ width: 48 }} />
+        <View style={{ width: col.done }} />
       </View>
 
       {exercise.sets.map((s, i) => (

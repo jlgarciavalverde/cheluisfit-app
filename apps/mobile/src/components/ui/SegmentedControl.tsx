@@ -48,16 +48,21 @@ export function SegmentedControl<T extends string>({
             }}
             style={{
               flex: 1,
+              minWidth: 0,
               minHeight: touch.min,
+              paddingHorizontal: space.sm,
               alignItems: "center",
               justifyContent: "center",
               borderRadius: radius.pill,
               backgroundColor: on ? c.surface : "transparent",
-              borderWidth: on ? 1 : 0,
-              borderColor: c.border,
+              // Borde siempre presente (transparente si no está elegido): antes aparecía solo en
+              // el elegido y movía su contenido 1 px.
+              borderWidth: 1,
+              borderColor: on ? c.border : "transparent",
             }}
           >
-            <Text variant="control" color={on ? "text" : "muted"}>
+            {/* Una línea: una etiqueta larga se encoge (nativo) o se corta, sin hacer más alto el control. */}
+            <Text variant="control" color={on ? "text" : "muted"} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {o.label}
             </Text>
           </Pressable>

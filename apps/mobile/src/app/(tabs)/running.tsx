@@ -281,11 +281,13 @@ export default function RunningScreen() {
       ) : null}
 
       <Section kind="overline" title="Sesiones" gap={space.sm}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm, flexWrap: "wrap" }}>
-          <Text variant="caption" color="muted" style={{ flex: 1 }} testID="sync-label">
-            {source === "strava" ? (stravaConnected ? syncLabel(lastStravaSync) : "Strava · no conectado") : syncLabel(lastSync)}
-          </Text>
-          <View style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
+        {/* El estado va en su propia línea: en la misma fila que el selector y el botón se quedaba
+            en ~60 dp y se partía palabra a palabra («Sincro / nizado / hace…», visto en el móvil). */}
+        <Text variant="caption" color="muted" numberOfLines={1} testID="sync-label">
+          {source === "strava" ? (stravaConnected ? syncLabel(lastStravaSync) : "Strava · no conectado") : syncLabel(lastSync)}
+        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <View style={{ flex: 1 }}>
             {/* La fuente es elección de la persona, no algo que se sustituye al conectar: Strava
                 trae ruta GPS; Garmin (Health Connect) no la trae pero no necesita servidor. */}
             <SegmentedControl
@@ -294,12 +296,12 @@ export default function RunningScreen() {
               testID="source-picker"
               value={source}
               onChange={setSource}
-              style={{ width: 176 }}
               options={[
                 { value: "garmin", label: "Garmin" },
                 { value: "strava", label: "Strava" },
               ]}
             />
+          </View>
             {source === "garmin" ? (
               <Button
                 testID="sync-garmin"
@@ -321,7 +323,6 @@ export default function RunningScreen() {
                 onPress={connectAndSyncStrava}
               />
             )}
-          </View>
         </View>
 
         {source === "strava" && !stravaConnected ? (

@@ -55,7 +55,7 @@ export default function SearchUsersScreen() {
   return (
     <Screen testID="screen-buscar-personas" scroll={false}>
       <ScreenHeader title="Buscar personas" back />
-      <SearchField testID="search-users" value={query} onChangeText={setQuery} placeholder="Buscar persona o usuario" autoFocus />
+      <SearchField testID="search-users" value={query} onChangeText={setQuery} placeholder="Buscar persona" autoFocus />
       <View style={{ paddingTop: space.sm }}>
         <SearchStatus query={query} loading={loading} count={error ? null : (results?.length ?? null)} noun={["persona", "personas"]} />
       </View>

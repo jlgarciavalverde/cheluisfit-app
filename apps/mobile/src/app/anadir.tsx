@@ -109,7 +109,7 @@ export default function AddFoodScreen() {
   const searchRow = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
       <View style={{ flex: 1 }}>
-        <SearchField testID="food-search" value={query} onChangeText={setQuery} placeholder="Buscar alimento o marca" autoFocus />
+        <SearchField testID="food-search" value={query} onChangeText={setQuery} placeholder="Buscar alimento" autoFocus />
       </View>
       <IconButton
         testID="open-scanner"

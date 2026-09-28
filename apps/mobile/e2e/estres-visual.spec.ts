@@ -24,7 +24,7 @@ function seed() {
         activities: runs,
         templates: [{ id: "tpl-long", name: `${LONG} plantilla`, kind: "easy", items: [] }],
         planned: [{ id: "p1", date: today, templateId: "tpl-long", activityId: "a-g" }],
-        lastSync: null,
+        lastSync: new Date(Date.now() - 10 * 60_000).toISOString(), // «Sincronizado hace 10 min», como en el móvil
         source: "garmin",
         dismissedExternalIds: [],
       },
@@ -123,6 +123,11 @@ async function layoutProblems(page: Page): Promise<string[]> {
     for (const el of leaves) {
       const r = el.getBoundingClientRect();
       if (r.right > vw + 1 || r.left < -1) problems.push(`se sale de la pantalla: ${label(el)} (${Math.round(r.left)}–${Math.round(r.right)} de ${vw})`);
+      // Texto estrujado en una columna estrecha y partido palabra a palabra (visto en el móvil con
+      // «Sincronizado hace 10 min» junto al selector de Running): 2+ líneas en menos de 80 px.
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 16;
+      const text = (el.textContent ?? "").trim();
+      if (text.length > 12 && text.includes(" ") && r.width < 80 && r.height > lh * 1.6) problems.push(`texto partido en columna estrecha: ${label(el)} (${Math.round(r.width)} px, ${Math.round(r.height / lh)} líneas)`);
     }
     for (let i = 0; i < leaves.length; i++) {
       for (let j = i + 1; j < leaves.length; j++) {
@@ -168,6 +173,7 @@ test("el detector sí caza un solape y un desborde de verdad (control del propio
 
 for (const [w, h] of [
   [360, 740],
+  [375, 834], // el Xiaomi del usuario (1220 px a 520 ppp)
   [390, 844],
 ] as const) {
   test.describe(`Estrés visual ${w}×${h}`, () => {

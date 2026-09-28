@@ -111,7 +111,7 @@ export default function MasScreen() {
       <View style={{ gap: space.xl }}>
         <UpdateCallout />
         <ListGroup>
-          <ListRow icon="person-circle-outline" title={name} subtitle="Datos personales y objetivo de nutrición" chevron onPress={() => router.push("/objetivo")} />
+          <ListRow icon="person-circle-outline" title={name || user?.name || "Tu perfil"} subtitle="Datos personales y objetivo de nutrición" chevron onPress={() => router.push("/objetivo")} />
           <ListRow icon="scale-outline" title="Peso corporal" subtitle="Registro y evolución" chevron onPress={() => router.push("/peso")} />
         </ListGroup>
 

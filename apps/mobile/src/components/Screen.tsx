@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { KeyboardAvoidingView, ScrollView, View } from "react-native";
 import { type Edge, SafeAreaView } from "react-native-safe-area-context";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
+import { useAuth } from "@/data/authStore";
 import { useBreakpoint, useTheme } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
 import { IconButton } from "./ui/Button";
@@ -41,6 +42,10 @@ export function Screen({
   const width = maxWidth ?? (variant === "tab" ? (bp === "wide" ? 1180 : 760) : variant === "form" ? 620 : bp === "wide" ? 900 : 760);
   // Con un entrenamiento abierto hay una barra flotante sobre la barra de pestañas: se deja hueco.
   const hasBar = useActiveWorkout((s) => !!s.workout) && !resolvedEdges.includes("bottom");
+  // Con sesión flota la burbuja del asistente abajo a la derecha: sin hueco extra tapaba el final
+  // de la pantalla (visto en el móvil: el último dato de una lista quedaba debajo). Solo al hacer
+  // scroll y sin pie fijo (con pie, la burbuja queda sobre el pie).
+  const hasAiBubble = useAuth((s) => !!s.token) && scroll && !footer && bp !== "wide";
   const pad = contentPadding ? (bp === "compact" ? space.lg : space.xl) : 0;
   const inner = (
     <View
@@ -49,7 +54,7 @@ export function Screen({
         maxWidth: width,
         alignSelf: "center",
         paddingHorizontal: pad,
-        paddingBottom: space.xl + (hasBar ? 76 : 0),
+        paddingBottom: space.xl + (hasBar ? 76 : 0) + (hasAiBubble ? 72 : 0),
         // Con `scroll={false}` este contenedor necesita altura acotada (heredada del `flex:1`
         // de más arriba) para que un `FlatList` dentro pueda virtualizar de verdad.
         ...(scroll ? null : { flex: 1 }),

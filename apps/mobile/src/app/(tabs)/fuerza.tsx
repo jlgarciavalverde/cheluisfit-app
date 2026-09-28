@@ -183,7 +183,7 @@ export default function FuerzaScreen() {
     <View style={{ gap: space.md, flex: 1 }}>
       <View style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
         <View style={{ flex: 1 }}>
-          <SearchField testID="ex-search" value={query} onChangeText={setQuery} placeholder="Buscar ejercicio o músculo" />
+          <SearchField testID="ex-search" value={query} onChangeText={setQuery} placeholder="Buscar ejercicio" />
         </View>
         <IconButton testID="new-exercise" icon="add" label="Crear ejercicio" filled="brand" color="onBrand" onPress={() => router.push("/crear-ejercicio")} />
       </View>

@@ -67,7 +67,7 @@ export function ExercisePicker({
 
   return (
     <FullScreenModal visible={visible} onClose={onClose} title={title} subtitle={subtitle} testID="exercise-picker">
-      <SearchField testID="picker-search" value={query} onChangeText={setQuery} placeholder="Buscar ejercicio o músculo" />
+      <SearchField testID="picker-search" value={query} onChangeText={setQuery} placeholder="Buscar ejercicio" />
       {/* Mismos filtros y contador que la pestaña Ejercicios de Fuerza. */}
       <View style={{ paddingVertical: space.md, gap: space.md }}>
         <ChipRow>

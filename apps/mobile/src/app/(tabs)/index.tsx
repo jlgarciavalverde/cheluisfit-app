@@ -8,6 +8,7 @@ import { SOURCE_ICON } from "@/components/running/ActivityCard";
 import { formatMinutes } from "@/components/running/TemplateCard";
 import { Callout, Badge, Button, Card, Icon, Overline, PressableCard, Text } from "@/components/ui";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
+import { useAuth } from "@/data/authStore";
 import { useRunning } from "@/data/runningStore";
 import { useLibrary, useStrength } from "@/data/strengthStore";
 import { nextSuggestedRoutine } from "@/domain/strength";
@@ -29,7 +30,10 @@ function greeting(): string {
 
 export default function HoyScreen() {
   const { isWide } = useBreakpoint();
-  const name = useNutrition((s) => s.profile.name);
+  // Nombre del perfil o, si está vacío (p. ej. tras «Vaciar y empezar de cero»), el de la cuenta.
+  const profileName = useNutrition((s) => s.profile.name);
+  const accountName = useAuth((s) => s.user?.name);
+  const name = (profileName || accountName || "").trim();
   const targets = useTargets();
   const entries = useNutrition((s) => s.entries);
   const templates = useRunning((s) => s.templates);
@@ -207,7 +211,7 @@ export default function HoyScreen() {
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap" }}>
           <Text variant="title" accessibilityRole="header">
-            {greeting()}, {name.split(" ")[0]}
+            {name ? `${greeting()}, ${name.split(" ")[0]}` : greeting()}
           </Text>
           {streak >= 1 ? (
             <View testID="streak-badge">

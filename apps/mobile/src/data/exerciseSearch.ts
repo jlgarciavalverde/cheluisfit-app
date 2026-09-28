@@ -50,6 +50,7 @@ export function filterExercises(list: readonly Exercise[], f: ExerciseFilter): E
   // Sin consulta no hay nada que puntuar ni ordenar: la lista ya viene en orden estable.
   // Antes se ordenaba siempre con localeCompare «es» y era eso lo que pillaba la pantalla.
   if (tokens.length === 0) return filtered;
+  const q = normalizeText(f.query ?? "");
   return filtered
     .map((e) => {
       const words = haystack(e);
@@ -60,10 +61,15 @@ export function filterExercises(list: readonly Exercise[], f: ExerciseFilter): E
         else if (words.join(" ").includes(t)) s += 1;
         else return { e, s: 0 };
       }
+      // El nombre exacto primero, y después los que empiezan por lo buscado: buscar «jalón en
+      // polea» ponía antes «Curl de bíceps con jalón en polea» (visto en el móvil).
+      const name = normalizeText(e.name);
+      if (name === q) s += 100;
+      else if (name.startsWith(q)) s += 20;
       return { e, s };
     })
     .filter((x) => x.s > 0)
-    .sort((a, b) => b.s - a.s || (a.e.source === "custom" ? -1 : 0) - (b.e.source === "custom" ? -1 : 0) || collator.compare(a.e.name, b.e.name))
+    .sort((a, b) => b.s - a.s || (a.e.source === "custom" ? -1 : 0) - (b.e.source === "custom" ? -1 : 0) || a.e.name.length - b.e.name.length || collator.compare(a.e.name, b.e.name))
     .map((x) => x.e);
 }
 

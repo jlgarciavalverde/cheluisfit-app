@@ -30,6 +30,8 @@ export default function GoalScreen() {
   const setTdeeEnabled = useNutrition((s) => s.setTdeeEnabled);
 
   const [sex, setSex] = useState<Sex>(profile.sex);
+  // Con «Vaciar y empezar de cero» el perfil queda sin nombre y no había dónde ponerlo.
+  const [displayName, setDisplayName] = useState(profile.name);
   const [age, setAge] = useState(String(profile.age));
   const [height, setHeight] = useState(String(profile.heightCm));
   const [weight, setWeight] = useState(String(profile.weightKg).replace(".", ","));
@@ -64,7 +66,7 @@ export default function GoalScreen() {
   const draft: Profile | null =
     profileOk && !hrBad
       ? {
-          name: profile.name,
+          name: displayName.trim(),
           sex,
           age: a,
           heightCm: h,
@@ -161,6 +163,7 @@ export default function GoalScreen() {
 
         <View style={{ gap: space.md }}>
           <Text variant="heading">Tus datos</Text>
+          <TextField testID="g-name" label="Nombre" value={displayName} onChangeText={setDisplayName} placeholder="Cómo quieres que te salude la app" maxLength={40} autoCapitalize="words" />
           <SegmentedControl
             role="radio"
             label="Sexo"

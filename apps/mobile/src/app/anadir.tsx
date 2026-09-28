@@ -43,7 +43,9 @@ export default function AddFoodScreen() {
   // `foods` por referencia: la búsqueda solo se relanza al cambiar el texto (antes, cada «+» o
   // cada alimento abierto cambiaba `foods` y volvía a buscar en USDA, con parpadeo incluido).
   const foodsRef = useRef(foods);
-  foodsRef.current = foods;
+  useEffect(() => {
+    foodsRef.current = foods;
+  }, [foods]);
   useEffect(() => {
     const q = query.trim();
     if (q.length < SEARCH_MIN_CHARS) {

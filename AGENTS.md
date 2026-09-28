@@ -751,6 +751,15 @@ que mete un solape a propósito para asegurar que el detector no aprueba siempre
 `test-results/estres/`. Lo que **no** cubre: la letra del sistema al 130 % (en la web no se puede
 simular; probar en el móvil con `adb shell settings put system font_scale 1.3`).
 
+**Desde la 0.14**: toque mínimo 48 dp en todo (`touch.min`); `IconButton` y `RadioCard` tienen
+`disabled` (anunciado al lector de pantalla); `SegmentedControl role="radio"` en los formularios
+(sexo, escala de esfuerzo, tema, fuente Garmin/Strava…) y `tabs` solo cuando cambia lo que se ve
+debajo; el fondo de `BottomSheet` es un botón «Cerrar hoja» **hermano** de la hoja (si la envolviera,
+axe lo marca como `nested-interactive`), así que las hojas no necesitan un «Cerrar» propio;
+esfuerzo RIR/RPE con `EffortChips` (una sola copia); tarjetas pulsables con `PressableCard`;
+letras de tipo de serie en español (C calentamiento, F fallo, D drop). ESLint: `pnpm lint`
+(`eslint.config.js`; las reglas del compilador de React quedan como aviso).
+
 **Guía de textos**: pantallas de creación se titulan «Nuevo/Nueva X», las de edición «Editar X»
 («Corregir datos» cuando es una corrección de un dato ajeno, no una edición propia). El botón
 final dice «Crear X» al crear o «Guardar cambios» al editar. «Añadir» es poner algo en una

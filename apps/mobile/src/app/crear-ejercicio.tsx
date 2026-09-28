@@ -176,6 +176,8 @@ export default function CreateExerciseScreen() {
         </FieldGroup>
         <FieldGroup label="Cómo se registra">
           <SegmentedControl<ExerciseKind>
+            role="radio"
+            label="Tipo de registro"
             value={kind}
             onChange={setKind}
             options={[

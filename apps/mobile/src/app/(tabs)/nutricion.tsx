@@ -189,7 +189,7 @@ export default function NutricionScreen() {
         label="Nombre"
         placeholder="Mi desayuno de siempre"
         initialValue={saving ? `Mi ${MEAL_LABEL[saving].toLowerCase()}` : ""}
-        confirmLabel="Guardar"
+        confirmLabel="Crear comida"
         onClose={() => setSaving(null)}
         onSubmit={(name) => {
           if (!saving) return;

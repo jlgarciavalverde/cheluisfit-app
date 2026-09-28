@@ -12,9 +12,11 @@ export function RadioCard({
   hint,
   onPress,
   leading,
+  disabled,
   testID,
 }: {
   selected: boolean;
+  disabled?: boolean;
   title: string;
   hint?: string;
   onPress: () => void;
@@ -27,6 +29,9 @@ export function RadioCard({
       testID={testID}
       accessibilityRole="radio"
       aria-checked={selected}
+      aria-disabled={disabled}
+      accessibilityState={{ checked: selected, disabled: !!disabled }}
+      disabled={disabled}
       onPress={() => {
         haptic.tap();
         onPress();
@@ -41,7 +46,7 @@ export function RadioCard({
         borderWidth: 2,
         borderColor: selected ? c.brand : c.border,
         backgroundColor: selected ? c.brandSoft : c.surface,
-        opacity: pressed ? interaction.pressedOpacity : 1,
+        opacity: disabled ? interaction.disabledOpacity : pressed ? interaction.pressedOpacity : 1,
       })}
     >
       {leading}

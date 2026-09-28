@@ -1,4 +1,4 @@
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { dayLabel, shortDayLabel } from "@/domain/dates";
 import { fmtDuration, fmtInt } from "@/domain/format";
 import {
@@ -16,7 +16,7 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
-import { Card } from "../ui/Card";
+import { Card, PressableCard } from "../ui/Card";
 import { ProgressBar } from "../ui/ProgressBar";
 import { Text } from "../ui/Text";
 
@@ -86,14 +86,12 @@ export function WorkoutCard({ workout, onPress }: { workout: Workout; onPress: (
   const t = workoutTotals(workout);
   const rel = dayLabel(workout.date);
   return (
-    <Pressable
+    <PressableCard
       testID={`workout-${workout.id}`}
-      accessibilityRole="button"
       accessibilityLabel={`${workout.name}, ${rel}, ${fmtInt(t.volume)} kilos de volumen`}
       onPress={onPress}
-      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+      style={{ gap: space.sm }}
     >
-      <Card style={{ gap: space.sm }}>
         <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: space.sm }}>
           <Text variant="heading" numberOfLines={1} style={{ flex: 1 }}>
             {workout.name}
@@ -125,8 +123,7 @@ export function WorkoutCard({ workout, onPress }: { workout: Workout; onPress: (
         <Text variant="caption" color="faint" numberOfLines={2}>
           {workout.exercises.map((e) => e.name).join(" · ")}
         </Text>
-      </Card>
-    </Pressable>
+    </PressableCard>
   );
 }
 

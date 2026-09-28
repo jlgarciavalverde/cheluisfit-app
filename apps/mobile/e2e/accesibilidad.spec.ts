@@ -75,7 +75,7 @@ for (const scheme of ["dark", "light"] as const) {
       await page.getByTestId("effort-opt-2").click();
       await page.getByTestId("set-label-2").click();
       expect(await audit(page)).toEqual([]);
-      await page.getByRole("button", { name: "Cerrar", exact: true }).first().click();
+      await page.getByRole("button", { name: "Cerrar hoja" }).last().click({ position: { x: 20, y: 20 } });
       await page.getByTestId("exercise-menu").click();
       expect(await audit(page)).toEqual([]);
     });

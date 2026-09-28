@@ -199,22 +199,22 @@ export function normalizeSets(sets: readonly SetLog[]): SetLog[] {
 }
 
 export interface SetLabel {
-  /** Lo que se ve en la columna «Serie»: 1, 2, 3… W o D. */
+  /** Lo que se ve en la columna «Serie»: 1, 2, 3… C (calentamiento) o D (drop). */
   label: string;
-  /** Insignia de tipo (W/F/D); las normales no llevan. */
-  badge?: "W" | "F" | "D";
+  /** Insignia de tipo: C = calentamiento, F = fallo, D = drop; las normales no llevan. */
+  badge?: "C" | "F" | "D";
   /** Posición dentro de la cadena de drops (1, 2…); 0 si no es drop. */
   dropIndex: number;
 }
 
-/** Numeración: solo cuentan las series de trabajo (normal y fallo); W y D llevan su letra. */
+/** Numeración: solo cuentan las series de trabajo (normal y fallo); C y D llevan su letra. */
 export function setLabels(sets: readonly SetLog[]): SetLabel[] {
   let n = 0;
   let drop = 0;
   return sets.map((s) => {
     if (s.type === "warmup") {
       drop = 0;
-      return { label: "W", badge: "W", dropIndex: 0 };
+      return { label: "C", badge: "C", dropIndex: 0 };
     }
     if (s.type === "drop") {
       drop += 1;

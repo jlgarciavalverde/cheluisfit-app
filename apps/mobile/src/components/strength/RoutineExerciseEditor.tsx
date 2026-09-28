@@ -98,8 +98,8 @@ export function RoutineExerciseEditor({
           </View>
           <Icon name={expanded ? "chevron-up" : "chevron-down"} size="sm" color="faint" />
         </Pressable>
-        <IconButton icon="arrow-up" label={`Subir ${name}`} size="sm" color="muted" onPress={() => canUp && onMove(-1)} />
-        <IconButton icon="arrow-down" label={`Bajar ${name}`} size="sm" color="muted" onPress={() => canDown && onMove(1)} />
+        <IconButton icon="arrow-up" label={`Subir ${name}`} size="sm" color="muted" disabled={!canUp} onPress={() => onMove(-1)} />
+        <IconButton icon="arrow-down" label={`Bajar ${name}`} size="sm" color="muted" disabled={!canDown} onPress={() => onMove(1)} />
       </View>
 
       {expanded ? (
@@ -142,6 +142,8 @@ export function RoutineExerciseEditor({
 
           <FieldGroup label="Sobrecarga progresiva">
             <SegmentedControl<ProgressionRule>
+              role="radio"
+              label="Regla de progresión"
               value={item.rule}
               onChange={(rule) => onChange({ ...item, rule })}
               options={[

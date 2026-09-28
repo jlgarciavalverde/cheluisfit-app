@@ -385,7 +385,7 @@ function Runner() {
         }}
       />
 
-      <BottomSheetForm visible={rename} title="Nombre del entrenamiento" label="Nombre" initialValue={workout.name} confirmLabel="Guardar" onClose={() => setRename(false)} onSubmit={(v) => { setName(v.trim()); setRename(false); }} />
+      <BottomSheetForm visible={rename} title="Nombre del entrenamiento" label="Nombre" initialValue={workout.name} confirmLabel="Guardar cambios" onClose={() => setRename(false)} onSubmit={(v) => { setName(v.trim()); setRename(false); }} />
 
       {/* Añadir / sustituir */}
       <ExercisePicker

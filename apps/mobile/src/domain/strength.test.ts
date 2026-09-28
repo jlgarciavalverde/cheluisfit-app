@@ -82,10 +82,10 @@ const cfg = { rule: "double" as const, repMin: 8, repMax: 12, increment: 2.5, pl
 const session = (date: string, ...sets: SetLog[]): SessionSets => ({ date, sets });
 
 describe("series: tipos, etiquetas y drops", () => {
-  it("numera solo las series de trabajo y da letra a W, F y D", () => {
+  it("numera solo las series de trabajo y da letra a C (calentamiento), F y D", () => {
     const sets = [newSet("warmup"), newSet("normal"), newSet("normal"), newSet("failure"), newSet("drop"), newSet("drop"), newSet("normal")];
-    expect(setLabels(sets).map((l) => l.label)).toEqual(["W", "1", "2", "3", "D", "D", "4"]);
-    expect(setLabels(sets).map((l) => l.badge)).toEqual(["W", undefined, undefined, "F", "D", "D", undefined]);
+    expect(setLabels(sets).map((l) => l.label)).toEqual(["C", "1", "2", "3", "D", "D", "4"]);
+    expect(setLabels(sets).map((l) => l.badge)).toEqual(["C", undefined, undefined, "F", "D", "D", undefined]);
     expect(setLabels(sets).map((l) => l.dropIndex)).toEqual([0, 0, 0, 0, 1, 2, 0]);
   });
 

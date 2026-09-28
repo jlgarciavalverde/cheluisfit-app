@@ -55,14 +55,16 @@ export default function NewSessionScreen() {
   return (
     <Screen variant="form"
       testID="screen-nueva-sesion"
-      footer={<Button testID="save-session" label="Registrar carrera" size="lg" fullWidth onPress={save} />}
+      footer={<Button testID="save-session" label={type === "run" ? "Registrar carrera" : "Registrar caminata"} size="lg" fullWidth onPress={save} />}
     >
-      <ScreenHeader title="Registrar carrera" back />
+      <ScreenHeader title={type === "run" ? "Nueva carrera" : "Nueva caminata"} back />
       <View style={{ gap: space.lg }}>
         <Text variant="caption" color="muted">
           Para carreras que no ha grabado el reloj. Las del Garmin llegan solas al sincronizar.
         </Text>
         <SegmentedControl
+          role="radio"
+          label="Tipo de sesión"
           testID="s-type"
           value={type}
           onChange={(t) => {

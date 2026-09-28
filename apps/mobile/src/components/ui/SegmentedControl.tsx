@@ -10,6 +10,8 @@ export function SegmentedControl<T extends string>({
   onChange,
   testID,
   style,
+  role = "tabs",
+  label,
 }: {
   options: { value: T; label: string }[];
   value: T;
@@ -19,12 +21,21 @@ export function SegmentedControl<T extends string>({
    * `flex: 1` colapsan al mínimo del contenido y las etiquetas largas se cortan (visto de verdad
    * con el selector Garmin/Strava de Running: 97 px para dos segmentos). */
   style?: StyleProp<ViewStyle>;
+  /**
+   * `tabs` (por defecto) cuando cambia lo que se ve debajo (Sesiones/Plantillas/Progreso);
+   * `radio` cuando es elegir un valor de un formulario (sexo, escala de esfuerzo, tema…): así el
+   * lector de pantalla anuncia «opción, seleccionada» en vez de «pestaña».
+   */
+  role?: "tabs" | "radio";
+  /** Nombre del grupo para el lector de pantalla (recomendado con `role="radio"`). */
+  label?: string;
 }) {
   const { c } = useTheme();
   return (
     <View
       testID={testID}
-      accessibilityRole="tablist"
+      accessibilityRole={role === "radio" ? "radiogroup" : "tablist"}
+      accessibilityLabel={label}
       style={[
         {
           flexDirection: "row",
@@ -40,8 +51,9 @@ export function SegmentedControl<T extends string>({
         return (
           <Pressable
             key={o.value}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
+            accessibilityRole={role === "radio" ? "radio" : "tab"}
+            accessibilityState={role === "radio" ? { checked: on } : { selected: on }}
+            aria-checked={role === "radio" ? on : undefined}
             onPress={() => {
               haptic.tap();
               onChange(o.value);

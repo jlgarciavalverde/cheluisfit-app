@@ -9,7 +9,7 @@ import { Icon } from "../ui/Icon";
 import { Text } from "../ui/Text";
 
 const fmt = (n: number | null) => (n === null ? "" : fmtKg(n));
-const BADGE_COLOR = { W: "carbs", F: "danger", D: "fat" } as const;
+const BADGE_COLOR = { C: "carbs", F: "danger", D: "fat" } as const;
 
 /** Celda numérica: escribe con teclado numérico; el valor sugerido se ve en gris hasta pulsar ✓. */
 function NumCell({

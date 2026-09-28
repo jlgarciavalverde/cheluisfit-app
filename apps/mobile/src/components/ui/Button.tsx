@@ -107,12 +107,15 @@ export function IconButton({
   color = "text",
   filled,
   size = "lg",
+  disabled,
   testID,
 }: {
   icon: IconName;
   /** Obligatorio: el botón no tiene texto visible. */
   label: string;
   onPress?: () => void;
+  /** Se ve apagado, no responde y el lector de pantalla lo anuncia (antes había botones que parecían activos y no hacían nada). */
+  disabled?: boolean;
   color?: "text" | "muted" | "brandText" | "danger" | "onBrand";
   filled?: boolean | "brand";
   size?: IconSize;
@@ -124,6 +127,8 @@ export function IconButton({
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
       onPress={() => {
         haptic.tap();
         onPress?.();
@@ -136,7 +141,7 @@ export function IconButton({
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: filled === "brand" ? c.brand : filled ? c.surfaceAlt : "transparent",
-        opacity: pressed ? interaction.pressedOpacity : 1,
+        opacity: disabled ? interaction.disabledOpacity : pressed ? interaction.pressedOpacity : 1,
       })}
     >
       <View>

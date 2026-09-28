@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { FullScreenModal } from "@/components/FullScreenModal";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import {
+  ActionList,
   ActionRow,
   Badge,
   BottomSheet,
@@ -13,6 +14,7 @@ import {
   Card,
   Chip,
   ChipRow,
+  Divider,
   CheckRow,
   CollapsibleSection,
   DurationField,
@@ -22,6 +24,7 @@ import {
   ListGroup,
   ListRow,
   Overline,
+  PressableCard,
   ProgressBar,
   RadioCard,
   RadioGroup,
@@ -36,6 +39,7 @@ import {
   Stepper,
   Text,
   TextField,
+  toast,
 } from "@/components/ui";
 import { useTheme, type ThemePref } from "@/theme/ThemeProvider";
 import { radius, space, typeScale } from "@/theme/tokens";
@@ -66,6 +70,8 @@ export default function GalleryScreen() {
       <View style={{ gap: space.xxl }}>
         <Section kind="overline" title="Apariencia">
           <SegmentedControl<ThemePref>
+            role="radio"
+            label="Apariencia"
             value={pref}
             onChange={setPref}
             options={[
@@ -150,6 +156,9 @@ export default function GalleryScreen() {
               <Card accent="warning">
                 <Text variant="bodyStrong">accent=warning</Text>
               </Card>
+              <PressableCard accessibilityLabel="Tarjeta pulsable" onPress={() => {}}>
+                <Text variant="bodyStrong">PressableCard (toda la tarjeta es un botón)</Text>
+              </PressableCard>
             </ResponsiveGrid>
             <Callout icon="information-circle-outline">Callout neutral: un dato informativo.</Callout>
             <Callout tone="brand" icon="sparkles" title="Callout de marca">Con título y texto.</Callout>
@@ -176,6 +185,8 @@ export default function GalleryScreen() {
             <ListRow icon="walk-outline" title="Otra fila" subtitle="Con valor a la derecha" value={<Text variant="bodyStrong">42</Text>} onPress={() => {}} />
             <ListRow icon="nutrition-outline" title="Fila sin acción" subtitle="No pulsable" />
           </ListGroup>
+          <Divider />
+          <Text variant="caption" color="muted">Divider: separador suelto fuera de un ListGroup.</Text>
         </Section>
 
         <Section kind="content" title="Secciones" subtitle="kind=content: título grande + subtítulo">
@@ -229,8 +240,11 @@ export default function GalleryScreen() {
 
         <Section kind="overline" title="Menús y modales">
           <View style={{ gap: space.sm }}>
-            <ActionRow icon="create-outline" label="Fila de acción" onPress={() => {}} />
-            <ActionRow icon="trash-outline" label="Fila de acción destructiva" tone="danger" onPress={() => {}} />
+            <ActionList>
+              <ActionRow icon="create-outline" label="Fila de acción" onPress={() => {}} />
+              <ActionRow icon="trash-outline" label="Fila de acción destructiva" tone="danger" onPress={() => {}} />
+            </ActionList>
+            <Button label="Mostrar aviso (toast)" variant="secondary" size="sm" onPress={() => toast("Aviso de ejemplo", { actionLabel: "Deshacer", onAction: () => {} })} />
             <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
               <Button label="Abrir hoja" variant="secondary" size="sm" onPress={() => setSheet(true)} />
               <Button label="Abrir formulario" variant="secondary" size="sm" onPress={() => setForm(true)} />

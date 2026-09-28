@@ -3,7 +3,8 @@ import { useMemo, useState } from "react";
 import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { WorkoutSets } from "@/components/strength/WorkoutSets";
-import { BottomSheet, BottomSheetForm, Button, Card, Chip, EmptyState, FieldGroup, IconButton, Text, TextField } from "@/components/ui";
+import { EffortChips } from "@/components/strength/SetsTableSheets";
+import { BottomSheet, BottomSheetForm, Button, Card, EmptyState, FieldGroup, IconButton, Text, TextField } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { useLibrary, useStrength } from "@/data/strengthStore";
@@ -11,9 +12,6 @@ import { dayLabel } from "@/domain/dates";
 import { fmtDuration, fmtInt, fmtKg, parseNum } from "@/domain/format";
 import {
   formatEffort,
-  RIR_OPTIONS,
-  rirToRpe,
-  RPE_OPTIONS,
   routineFromWorkout,
   type SetLog,
   workoutPRs,
@@ -72,7 +70,6 @@ export default function WorkoutDetailScreen() {
     if (nid) router.replace({ pathname: "/entreno/[id]", params: { id: nid } });
   };
 
-  const options = effortMode === "rir" ? RIR_OPTIONS : RPE_OPTIONS;
 
   return (
     <Screen testID="screen-detalle">
@@ -161,13 +158,7 @@ export default function WorkoutDetailScreen() {
             />
           </View>
           <FieldGroup label={`Esfuerzo (${effortMode.toUpperCase()})`} hint={`Ahora: ${editing ? formatEffort(editing.set.rpe, effortMode) : ""}`}>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-              {options.map((o) => {
-                const rpe = effortMode === "rir" ? rirToRpe(o) : o;
-                return <Chip key={o} label={fmtKg(o)} selected={editing?.set.rpe === rpe} onPress={() => patch({ rpe })} />;
-              })}
-              <Chip label="Sin dato" selected={editing?.set.rpe === null} onPress={() => patch({ rpe: null })} />
-            </View>
+            <EffortChips mode={effortMode} current={editing?.set.rpe ?? null} onPick={(rpe) => patch({ rpe })} withNone />
           </FieldGroup>
           <Button label="Listo" fullWidth onPress={() => setEditing(null)} />
         </View>
@@ -180,7 +171,7 @@ export default function WorkoutDetailScreen() {
         </View>
       </BottomSheet>
 
-      <BottomSheetForm visible={rename} title="Nombre del entrenamiento" label="Nombre" initialValue={workout.name} confirmLabel="Guardar" onClose={() => setRename(false)} onSubmit={(v) => { updateWorkout({ ...workout, name: v.trim() }); setRename(false); }} />
+      <BottomSheetForm visible={rename} title="Nombre del entrenamiento" label="Nombre" initialValue={workout.name} confirmLabel="Guardar cambios" onClose={() => setRename(false)} onSubmit={(v) => { updateWorkout({ ...workout, name: v.trim() }); setRename(false); }} />
     </Screen>
   );
 }

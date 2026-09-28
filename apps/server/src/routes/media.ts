@@ -4,7 +4,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { requireUser } from "../auth";
 import { get, run } from "../db";
-import { HttpError } from "../http";
+import { HttpError, perUserKey } from "../http";
 import type { Register } from "./ctx";
 
 const ALLOWED: Record<string, string> = {
@@ -14,6 +14,20 @@ const ALLOWED: Record<string, string> = {
   "video/mp4": "mp4",
 };
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB: de sobra para una foto o un vídeo corto de ejercicio.
+/** Tope de lo que puede tener subido cada persona (fotos de ejercicios, perfil y publicaciones). */
+const MAX_BYTES_PER_USER = 1024 * 1024 * 1024;
+
+/**
+ * ¿El contenido es de verdad del tipo que dice el móvil? El tipo lo declara el cliente; sin mirar
+ * los primeros bytes, cualquier cosa renombrada a `.jpg` se guardaba y se servía como imagen.
+ */
+export function looksLike(mime: string, b: Buffer): boolean {
+  if (mime === "image/jpeg") return b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+  if (mime === "image/png") return b.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  if (mime === "image/webp") return b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP";
+  if (mime === "video/mp4") return b.subarray(4, 8).toString("latin1") === "ftyp";
+  return false;
+}
 
 /**
  * Fotos y vídeos que el móvil sube (ejercicios propios, progreso). El archivo vive en
@@ -24,7 +38,9 @@ const MAX_BYTES = 25 * 1024 * 1024; // 25 MB: de sobra para una foto o un vídeo
  * amigos y familia, no para datos médicos sensibles.
  */
 export const registerMedia: Register = (app, { db, cfg }) => {
-  app.post("/api/media", async (req, reply) => {
+  const uploadLimit = { config: { rateLimit: { max: 60, timeWindow: "1 hour", keyGenerator: perUserKey } } };
+
+  app.post("/api/media", uploadLimit, async (req, reply) => {
     const user = requireUser(db, req.headers.authorization);
     const file = await req.file({ limits: { fileSize: MAX_BYTES } });
     if (!file) throw new HttpError(400, "Falta el archivo");
@@ -33,6 +49,9 @@ export const registerMedia: Register = (app, { db, cfg }) => {
 
     const buffer = await file.toBuffer();
     if (buffer.byteLength > MAX_BYTES) throw new HttpError(413, "El archivo pesa demasiado (máx. 25 MB)");
+    if (!looksLike(file.mimetype, buffer)) throw new HttpError(415, "El archivo no es una foto o un vídeo válido");
+    const used = (get(db, "SELECT COALESCE(SUM(size), 0) AS n FROM media WHERE user_id = ?", user.id) as { n: number }).n;
+    if (used + buffer.byteLength > MAX_BYTES_PER_USER) throw new HttpError(413, "Has llegado al límite de fotos y vídeos guardados (1 GB)");
 
     const id = randomUUID();
     await writeFile(join(cfg.mediaDir, `${id}.${ext}`), buffer);

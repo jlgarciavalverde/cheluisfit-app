@@ -83,7 +83,7 @@ export function WorkoutSets({
                   }}
                 >
                   <View style={{ minWidth: 30, alignItems: "center" }}>
-                    {l.badge ? <Badge label={`${l.badge}${l.dropIndex > 1 ? l.dropIndex : ""}`} tone={l.badge === "W" ? "warning" : l.badge === "F" ? "danger" : "neutral"} /> : (
+                    {l.badge ? <Badge label={`${l.badge}${l.dropIndex > 1 ? l.dropIndex : ""}`} tone={l.badge === "C" ? "warning" : l.badge === "F" ? "danger" : "neutral"} /> : (
                       <Text variant="bodyStrong" color="muted" tabular>
                         {l.label}
                       </Text>

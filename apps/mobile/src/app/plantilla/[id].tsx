@@ -265,8 +265,8 @@ function RepeatBlock({
           }}
         />
         <View style={{ flexDirection: "row" }}>
-          <IconButton icon="arrow-up" label="Subir bloque" size="sm" color="muted" onPress={() => canUp && onMove(-1)} />
-          <IconButton icon="arrow-down" label="Bajar bloque" size="sm" color="muted" onPress={() => canDown && onMove(1)} />
+          <IconButton icon="arrow-up" label="Subir bloque" size="sm" color="muted" disabled={!canUp} onPress={() => onMove(-1)} />
+          <IconButton icon="arrow-down" label="Bajar bloque" size="sm" color="muted" disabled={!canDown} onPress={() => onMove(1)} />
           <IconButton icon="trash-outline" label="Quitar bloque" size="md" color="danger" onPress={onRemove} />
         </View>
       </View>

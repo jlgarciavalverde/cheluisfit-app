@@ -123,8 +123,8 @@ export function StepEditor({
           </Text>
           <Icon name={expanded ? "chevron-up" : "chevron-down"} size="sm" color="faint" />
         </Pressable>
-        <IconButton icon="arrow-up" label="Subir paso" size="sm" color={canUp ? "muted" : "muted"} onPress={() => canUp && onMove(-1)} />
-        <IconButton icon="arrow-down" label="Bajar paso" size="sm" color="muted" onPress={() => canDown && onMove(1)} />
+        <IconButton icon="arrow-up" label="Subir paso" size="sm" color="muted" disabled={!canUp} onPress={() => onMove(-1)} />
+        <IconButton icon="arrow-down" label="Bajar paso" size="sm" color="muted" disabled={!canDown} onPress={() => onMove(1)} />
       </View>
 
       {expanded ? (
@@ -139,6 +139,8 @@ export function StepEditor({
 
           <FieldGroup label="Duración">
             <SegmentedControl<DurType>
+              role="radio"
+              label="Duración del paso"
               value={step.duration.type}
               onChange={changeDurType}
               options={[
@@ -198,6 +200,8 @@ export function StepEditor({
 
           <FieldGroup label="Objetivo">
             <SegmentedControl<TargetType>
+              role="radio"
+              label="Objetivo del paso"
               value={step.target.type}
               onChange={changeTargetType}
               options={[

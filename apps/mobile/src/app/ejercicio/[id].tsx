@@ -166,7 +166,7 @@ export default function ExerciseDetailScreen() {
           </Section>
         ) : null}
         <Text variant="caption" color="faint">
-          Catálogo de ejercicios: Exercise data by RepDB (repdb.co), wger (CC-BY-SA) y free-exercise-db.
+          Catálogo de ejercicios: Exercise data by RepDB (repdb.co), hasaneyldrm/exercises-dataset (MIT), wger (CC-BY-SA) y free-exercise-db.
         </Text>
       </View>
     </Screen>

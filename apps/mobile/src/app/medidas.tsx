@@ -100,7 +100,7 @@ export default function MeasurementsScreen() {
               onSubmitEditing={save}
             />
             <View style={{ paddingBottom: invalid ? 22 : 0 }}>
-              <Button testID="measurement-save" label={existing ? "Reemplazar" : "Registrar"} disabled={cm === null || invalid} onPress={save} />
+              <Button testID="measurement-save" label={existing ? "Reemplazar" : "Añadir medida"} disabled={cm === null || invalid} onPress={save} />
             </View>
           </View>
         </Card>

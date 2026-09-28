@@ -1,7 +1,8 @@
 // Copias cruzadas entre el Mac y el VPS, para que ninguna pérdida de una sola máquina sea
 // irreparable:
 //   VPS → Mac: las copias de la base de datos (`data/backups/*.db`), que en el VPS viven en el
-//              mismo disco que la base de datos real → `~/Copias/cheluisfit/db/`.
+//              mismo disco que la base de datos real → `~/Copias/cheluisfit/db/`; y las fotos y
+//              vídeos subidos (`data/media/`) → `~/Copias/cheluisfit/media/`.
 //   Mac → VPS: el código entero con su historial (`git bundle`, se restaura con
 //              `git clone repo-<fecha>.bundle`) y la clave de firma del APK (`cheluisfit.jks`, ya
 //              protegida por su contraseña; el `.properties` con la contraseña NO sale del Mac:
@@ -28,6 +29,12 @@ const have = new Set(readdirSync(localDb));
 const missing = remoteFiles.filter((f) => !have.has(f) || f.startsWith(`cheluisfit-${stamp}`));
 for (const f of missing) run("scp", ["-q", `${HOST}:servicios/cheluisfit/data/backups/${f}`, join(localDb, f)]);
 console.log(`→ Base de datos: ${missing.length} copia(s) nuevas en ${localDb} (${remoteFiles.length} en el VPS)`);
+
+// 1b. VPS → Mac: fotos y vídeos subidos (no están en la base de datos ni en sus copias).
+const localMedia = join(homedir(), "Copias", "cheluisfit", "media");
+mkdirSync(localMedia, { recursive: true });
+run("rsync", ["-a", `${HOST}:servicios/cheluisfit/data/media/`, `${localMedia}/`]);
+console.log(`→ Fotos y vídeos: sincronizados en ${localMedia}`);
 
 // 2. Mac → VPS: código con todo su historial.
 run("ssh", [HOST, `mkdir -p ${REMOTE}/firma && chmod 700 ${REMOTE} ${REMOTE}/firma`]);

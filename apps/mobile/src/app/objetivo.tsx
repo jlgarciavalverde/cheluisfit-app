@@ -162,6 +162,8 @@ export default function GoalScreen() {
         <View style={{ gap: space.md }}>
           <Text variant="heading">Tus datos</Text>
           <SegmentedControl
+            role="radio"
+            label="Sexo"
             options={[
               { value: "male", label: "Hombre" },
               { value: "female", label: "Mujer" },

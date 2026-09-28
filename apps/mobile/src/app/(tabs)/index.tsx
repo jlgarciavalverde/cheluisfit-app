@@ -1,12 +1,12 @@
 import { router } from "expo-router";
 import { useMemo } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { UpdateCallout } from "@/components/UpdateCallout";
 import { KcalRing, MacroBars } from "@/components/nutrition/DaySummary";
 import { SOURCE_ICON } from "@/components/running/ActivityCard";
 import { formatMinutes } from "@/components/running/TemplateCard";
-import { Callout, Badge, Button, Card, Icon, Overline, Text } from "@/components/ui";
+import { Callout, Badge, Button, Card, Icon, Overline, PressableCard, Text } from "@/components/ui";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { useRunning } from "@/data/runningStore";
 import { useLibrary, useStrength } from "@/data/strengthStore";
@@ -58,13 +58,7 @@ export default function HoyScreen() {
   }, [entries, activities, gymWorkouts, today]);
 
   const nutrition = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Ver nutrición de hoy"
-      onPress={() => router.navigate("/nutricion")}
-      style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
-    >
-      <Card style={{ gap: space.lg }} testID="hoy-nutricion">
+    <PressableCard accessibilityLabel="Ver nutrición de hoy" onPress={() => router.navigate("/nutricion")} style={{ gap: space.lg }} testID="hoy-nutricion">
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text variant="heading">Nutrición</Text>
           <Icon name="chevron-forward" size="md" color="faint" />
@@ -76,8 +70,7 @@ export default function HoyScreen() {
           </Text>
         </View>
         <MacroBars totals={totals} targets={targets} />
-      </Card>
-    </Pressable>
+    </PressableCard>
   );
 
   const training = (
@@ -114,13 +107,12 @@ export default function HoyScreen() {
       </Card>
 
       {last ? (
-        <Pressable
-          accessibilityRole="button"
+        <PressableCard
           accessibilityLabel={`Última actividad: ${last.title}`}
           onPress={() => router.push({ pathname: "/sesion/[id]", params: { id: last.id } })}
-          style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
+          style={{ gap: space.md }}
+          testID="hoy-ultima"
         >
-          <Card style={{ gap: space.md }} testID="hoy-ultima">
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Overline color="muted">Última actividad</Overline>
               <Badge label={SOURCE_LABEL[last.source]} icon={SOURCE_ICON[last.source]} />
@@ -146,8 +138,7 @@ export default function HoyScreen() {
                 </Text>
               </View>
             </View>
-          </Card>
-        </Pressable>
+        </PressableCard>
       ) : null}
 
       <Card style={{ gap: space.md }} testID="hoy-fuerza">

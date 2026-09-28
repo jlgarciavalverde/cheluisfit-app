@@ -126,7 +126,7 @@ export default function MasScreen() {
                     {user.email}
                   </Text>
                 </View>
-                {user.role === "admin" ? <Badge label="Admin" tone="brand" /> : null}
+                {user.role === "admin" ? <Badge label="Administrador" tone="brand" /> : null}
               </View>
               {syncError ? (
                 <Callout tone="warning" icon="cloud-offline-outline" dense>
@@ -225,6 +225,8 @@ export default function MasScreen() {
 
         <Section kind="overline" title="Apariencia" gap={space.sm}>
           <SegmentedControl<ThemePref>
+            role="radio"
+            label="Apariencia"
             value={pref}
             onChange={setPref}
             options={[
@@ -253,6 +255,8 @@ export default function MasScreen() {
             <View style={{ gap: space.sm }}>
               <Text variant="bodyStrong">Esfuerzo por serie</Text>
               <SegmentedControl<EffortMode>
+                role="radio"
+                label="Escala de esfuerzo"
                 value={effortMode}
                 onChange={setEffortMode}
                 options={[
@@ -368,8 +372,9 @@ export default function MasScreen() {
             Los datos de productos y códigos de barras proceden de Open Food Facts (licencia ODbL); los alimentos genéricos, de tablas USDA.
           </Text>
           <Text variant="caption" color="muted">
-            <Text variant="caption" color="brandText" onPress={() => Linking.openURL("https://repdb.co")}>Exercise data by RepDB (repdb.co)</Text>
-            {" · Catálogo de ejercicios también de wger (CC-BY-SA) y free-exercise-db."}
+            {/* «Exercise data by RepDB» es la atribución que pide RepDB, tal cual; hasaneyldrm (MIT) exige citarlo. */}
+            <Text variant="caption" color="brandText" accessibilityRole="link" onPress={() => Linking.openURL("https://repdb.co")}>Exercise data by RepDB (repdb.co)</Text>
+            {" · Catálogo de ejercicios también de hasaneyldrm/exercises-dataset (MIT), wger (CC-BY-SA) y free-exercise-db."}
           </Text>
           <Text variant="caption" color="muted">
             Los valores calculados son orientativos y no sustituyen el consejo de un profesional sanitario.

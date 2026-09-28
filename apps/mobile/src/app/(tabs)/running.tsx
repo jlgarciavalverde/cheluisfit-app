@@ -289,6 +289,8 @@ export default function RunningScreen() {
             {/* La fuente es elección de la persona, no algo que se sustituye al conectar: Strava
                 trae ruta GPS; Garmin (Health Connect) no la trae pero no necesita servidor. */}
             <SegmentedControl
+              role="radio"
+              label="Fuente de actividades"
               testID="source-picker"
               value={source}
               onChange={setSource}

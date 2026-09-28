@@ -245,6 +245,19 @@ describe("fotos de ejercicios (media)", () => {
 
 });
 
+describe("media: tipo real del archivo", () => {
+  it("rechaza un archivo que dice ser jpg y no lo es", async () => {
+    const boundary = "----mt";
+    const body = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="x.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`),
+      Buffer.from("<html>no soy una foto</html>"),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const r = await app.inject({ method: "POST", url: "/api/media", headers: { authorization: `Bearer ${token}`, "content-type": `multipart/form-data; boundary=${boundary}` }, payload: body });
+    expect(r.statusCode).toBe(415);
+  });
+});
+
 describe("asistente de IA", () => {
   const body = { section: "nutrition", messages: [{ role: "user", content: "¿Qué ceno hoy?" }], context: "Objetivo: 2000 kcal. Hoy llevas 1200." };
   afterAll(() => generateTextMock.mockReset());

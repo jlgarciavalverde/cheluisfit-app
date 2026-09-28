@@ -194,13 +194,13 @@ test.describe("Running", () => {
     await page.goto("/running");
     // Por defecto la fuente es Garmin (Health Connect), con su botón de sincronizar.
     await expect(page.getByTestId("sync-garmin")).toBeVisible();
-    await page.getByTestId("source-picker").getByRole("tab", { name: "Strava" }).click();
+    await page.getByTestId("source-picker").getByRole("radio", { name: "Strava" }).click();
     await expect(page.getByTestId("sync-garmin")).toHaveCount(0);
     await expect(page.getByTestId("sync-strava")).toContainText("Conectar");
     await page.getByTestId("sync-strava").click();
     await expect(page.getByText("Inicia sesión para conectar Strava")).toBeVisible();
     // Se puede volver a Garmin en cualquier momento: la fuente no se sustituye al conectar.
-    await page.getByTestId("source-picker").getByRole("tab", { name: "Garmin" }).click();
+    await page.getByTestId("source-picker").getByRole("radio", { name: "Garmin" }).click();
     await expect(page.getByTestId("sync-garmin")).toBeVisible();
   });
 
@@ -231,7 +231,7 @@ test.describe("Running", () => {
     // Con Strava conectado (mockeado en /api/strava/status) el selector lo refleja, pero Garmin
     // sigue disponible: la fuente es elección de la persona.
     await expect(page.getByTestId("sync-garmin")).toBeVisible();
-    await page.getByTestId("source-picker").getByRole("tab", { name: "Strava" }).click();
+    await page.getByTestId("source-picker").getByRole("radio", { name: "Strava" }).click();
     await expect(page.getByTestId("sync-garmin")).toHaveCount(0);
     await expect(page.getByTestId("sync-strava")).toContainText("Sincronizar");
     await page.getByTestId("sync-strava").click();

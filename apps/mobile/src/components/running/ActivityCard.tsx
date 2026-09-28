@@ -1,11 +1,11 @@
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { dayLabel, shortDayLabel } from "@/domain/dates";
 import { fmtDuration, fmtKm, fmtPace } from "@/domain/format";
 import { type Activity, avgPace, SOURCE_LABEL, type Template } from "@/domain/running";
 import { useTheme } from "@/theme/ThemeProvider";
 import { radius, space } from "@/theme/tokens";
 import { Badge } from "../ui/Badge";
-import { Card } from "../ui/Card";
+import { PressableCard } from "../ui/Card";
 import { Icon, type IconName } from "../ui/Icon";
 
 export const SOURCE_ICON: Record<Activity["source"], IconName> = { garmin: "watch-outline", strava: "navigate-outline", manual: "create-outline" };
@@ -25,14 +25,12 @@ export function ActivityCard({
   const rel = dayLabel(activity.date);
   const when = ["Hoy", "Ayer", "Mañana"].includes(rel) ? `${rel} · ${shortDayLabel(activity.date)}` : rel;
   return (
-    <Pressable
+    <PressableCard
       testID={`activity-${activity.id}`}
-      accessibilityRole="button"
       accessibilityLabel={`${activity.title}, ${when}, ${fmtKm(activity.distanceM)} kilómetros`}
       onPress={onPress}
-      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+      style={{ gap: space.md }}
     >
-      <Card style={{ gap: space.md }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
           <View
             style={{
@@ -69,7 +67,6 @@ export function ActivityCard({
             De la plantilla «{template.name}»
           </Text>
         ) : null}
-      </Card>
-    </Pressable>
+    </PressableCard>
   );
 }

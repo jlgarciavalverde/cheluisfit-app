@@ -110,8 +110,8 @@ export type IconSize = keyof typeof iconSize;
 /** Duraciones de animación (ms). Se reducen a 0 con «reducir movimiento». */
 export const motion = { fast: 150, base: 280, slow: 500, hero: 650 } as const;
 
-/** Objetivos táctiles (dp). */
-export const touch = { min: 44, comfortable: 48 } as const;
+/** Objetivos táctiles (dp). 48 es el mínimo de la guía del proyecto (WCAG 2.5.5 y Android). */
+export const touch = { min: 48, comfortable: 48 } as const;
 
 /** Estado de pulsación y de deshabilitado, iguales en todos los componentes. */
 export const interaction = { pressedOpacity: 0.85, disabledOpacity: 0.5 } as const;

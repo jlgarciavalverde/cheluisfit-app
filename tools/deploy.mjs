@@ -48,6 +48,9 @@ sh("docker", ["buildx", "build", "--platform", "linux/amd64", "--build-arg", `AP
 console.log("→ Subiendo la imagen al VPS…");
 execFileSync("sh", ["-c", `docker save cheluisfit:${version} | gzip | ssh ${HOST} 'docker load'`], { stdio: "inherit" });
 
+// La versión en marcha se lee ANTES de copiar `deploy/docker-compose.yml` (que es una plantilla con
+// una imagen vieja): si no, la «versión anterior» para volver atrás sería la de la plantilla.
+const previous = out("ssh", [HOST, `grep -o 'image: cheluisfit:[^ ]*' ${REMOTE_DIR}/docker-compose.yml 2>/dev/null | cut -d: -f3 || true`]);
 console.log("→ Preparando ~/servicios/cheluisfit en el VPS (primera vez: compose + .env.example)…");
 sh("ssh", [HOST, `mkdir -p ${REMOTE_DIR}/data/downloads`]);
 sh("scp", ["deploy/docker-compose.yml", `${HOST}:${REMOTE_DIR}/docker-compose.yml`]);
@@ -57,7 +60,6 @@ sh("ssh", [HOST, `test -f ${REMOTE_DIR}/.env || cp ${REMOTE_DIR}/.env.example ${
 
 // Copia de la base de datos justo antes de reiniciar (las migraciones corren al arrancar la versión
 // nueva y la copia automática puede tener horas). La hace el propio contenedor, con `node:sqlite`.
-const previous = out("ssh", [HOST, `grep -o 'image: cheluisfit:[^ ]*' ${REMOTE_DIR}/docker-compose.yml | cut -d: -f3 || true`]);
 console.log(`→ Copia de la base de datos antes de actualizar (versión actual: ${previous || "?"})…`);
 try {
   sh("ssh", [

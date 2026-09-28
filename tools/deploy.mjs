@@ -120,6 +120,13 @@ if (existsSync(apk) && existsSync(versionJson)) {
 }
 
 
+// Copias cruzadas Mac ↔ VPS (base de datos, código, clave de firma): best-effort, no rompe el despliegue.
+try {
+  sh("node", ["tools/backup-offsite.mjs"]);
+} catch {
+  console.warn("⚠ Las copias cruzadas han fallado; el despliegue sí está hecho. Reintenta con node tools/backup-offsite.mjs");
+}
+
 console.log(`\n✓ Desplegado cheluisfit:${version}. Recuerda: la ruta pública en Cloudflare Tunnel (cheluisfit.redgarverde.com → http://cheluisfit:3000) se añade a mano en el panel — no se puede hacer por SSH/CLI.`);
 console.log(`\n→ Descarga del APK (usa SIEMPRE esta URL con «?v=», no /app.apk a secas — Cloudflare cachea .apk ~4h en su borde ignorando la cabecera Cache-Control del origen, y la query string evita que sirva una copia vieja):`);
 console.log(`  https://cheluisfit.redgarverde.com/app.apk?v=${version}`);

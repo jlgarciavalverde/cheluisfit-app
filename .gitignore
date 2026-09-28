@@ -19,3 +19,4 @@ apps/server/data
 *.key
 # Plantilla sin secretos: sí se versiona.
 !.env.example
+.repo-*.bundle

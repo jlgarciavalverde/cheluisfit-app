@@ -76,11 +76,12 @@ El plan completo (stack, decisiones, diseño de pantallas) está en
   si `/health` no responde): `sed -i "s|image: cheluisfit:.*|image: cheluisfit:<anterior>|" docker-compose.yml`,
   lo mismo con `APP_VERSION=` en `.env`, y `docker compose up -d` (las imágenes anteriores siguen
   cargadas: `docker images cheluisfit`).
-- Las copias viven en el mismo disco que la base de datos: para una copia fuera del VPS,
-  `scp joseluis@192.168.18.7:servicios/cheluisfit/data/backups/*.db <destino>` de vez en cuando.
-- La **clave de firma del APK** (`~/.android-keystores/cheluisfit.jks` + `.properties`) solo
-  existe en este Mac: guárdala también cifrada fuera de él. Si se pierde, las actualizaciones
-  dejarían de instalarse encima y habría que desinstalar (perdiendo lo no sincronizado).
+- **Copias cruzadas** (`node tools/backup-offsite.mjs`, y solas al final de cada despliegue):
+  las copias de la base de datos bajan al Mac (`~/Copias/cheluisfit/db/`), y el código con todo su
+  historial (`git bundle`; restaurar: `git clone repo-<fecha>.bundle cheluisfit`) y la clave de
+  firma del APK suben al VPS (`~/backups/cheluisfit/`). La **contraseña** de la clave
+  (`~/.android-keystores/cheluisfit.properties`) no sale del Mac: guárdala en tu gestor de
+  contraseñas. Sin clave ni contraseña, las actualizaciones dejarían de instalarse encima.
 
 ## Próximos pasos
 

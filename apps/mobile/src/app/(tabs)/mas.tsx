@@ -374,7 +374,7 @@ export default function MasScreen() {
           <Text variant="caption" color="muted">
             {/* «Exercise data by RepDB» es la atribución que pide RepDB, tal cual; hasaneyldrm (MIT) exige citarlo. */}
             <Text variant="caption" color="brandText" accessibilityRole="link" onPress={() => Linking.openURL("https://repdb.co")}>Exercise data by RepDB (repdb.co)</Text>
-            {" · Catálogo de ejercicios también de hasaneyldrm/exercises-dataset (MIT), wger (CC-BY-SA) y free-exercise-db."}
+            {" · Catálogo de ejercicios también de hasaneyldrm/exercises-dataset (MIT), wger (CC-BY-SA) y free-exercise-db. Datos y GIF animados: AscendAPI / ExerciseDB (ascendapi.com) · © Gym visual (gymvisual.com)."}
           </Text>
           <Text variant="caption" color="muted">
             Los valores calculados son orientativos y no sustituyen el consejo de un profesional sanitario.

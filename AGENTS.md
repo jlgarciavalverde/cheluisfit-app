@@ -370,6 +370,22 @@ web` (o `pnpm e2e`, que ya lo hace) para tener `apps/mobile/dist/` al día.
   (`fed:`/`repdb:`/`wger:`, las expande `exerciseCatalog.ts`); y **las instrucciones van en
   `catalogInstructions.json` aparte**, cargadas bajo demanda con `loadInstructions()` al abrir la
   ficha (en web es un trozo aparte: el paquete inicial bajó de 5,3 a 4,2 MB).
+  **Imágenes (0.15, a petición del usuario: «todos con foto o GIF»)**, por orden de preferencia:
+  vídeo propio → fotos (free-exercise-db, RepDB, wger; dos fotogramas alternando) → **GIF de
+  ExerciseDB** → nada. Los GIF salen de hasaneyldrm: su `media_id` (guardado en
+  `tools/catalog-cache/hv.json`) es el `exerciseId` de ExerciseDB, y la app los **enlaza**
+  (`edb:<id>` → `https://static.exercisedb.dev/media/<id>.gif`, 180×180, `contentFit="contain"`,
+  caché en disco, parados en miniaturas y con «reducir movimiento»). **Licencia**: la API gratuita
+  de ExerciseDB permite apps no comerciales con atribución a AscendAPI; los GIF son © Gym visual
+  (atribución en Acerca de y en la ficha). **Si la app llegara a cobrar algo, hay que licenciarlos**
+  (ExerciseDB Starter, 199 $) o quitarlos. Además el build **cruza por nombre** los que siguen sin
+  imagen con otros que sí la tienen (mismo conjunto de palabras, o Dice ≥ 0,9 con el mismo
+  equipamiento; revisión en `tools/catalog-cache/cross-fill-review.txt`), y marca `hidden: true`
+  en los que no tienen ninguna imagen (393): `filterExercises` y `suggestSubstitutes` no los
+  ofrecen, pero siguen en `CATALOG`/`CATALOG_BY_ID`/`useLibrary` para rutinas y entrenos que ya los
+  usaran. Las fotos de free-exercise-db usan la **carpeta real** del repositorio (`folder` en
+  `fed.json`; «3/4 Sit-Up» vive en `3_4_Sit-Up/`) — 34 enlaces daban 404. Visibles: 2.534, todos con
+  imagen (lo comprueba `data/catalog.test.ts`).
 - **Datos de ejemplo** (`src/data/seed*.ts`): los productos con marca y código de barras son
   reales de Open Food Facts; el resto, aproximados. Migraciones del almacén: **hay datos reales,
   migrar de verdad**. Los `migrate` rellenan los campos nuevos desde `empty()`, **nunca desde

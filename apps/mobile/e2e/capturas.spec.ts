@@ -15,10 +15,15 @@ const PLACEHOLDER_PNG = Buffer.from(
   "base64",
 );
 
+// GIF de 1×1 transparente.
+const PLACEHOLDER_GIF = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+
 test.beforeEach(async ({ page }) => {
   await page.route("https://raw.githubusercontent.com/**", (route) =>
     route.fulfill({ body: PLACEHOLDER_PNG, contentType: "image/png" }),
   );
+  // Los GIF de ExerciseDB también, para que la captura no dependa de su servidor.
+  await page.route("https://static.exercisedb.dev/**", (route) => route.fulfill({ body: PLACEHOLDER_GIF, contentType: "image/gif" }));
   // El saludo de «Hoy» cambia según la hora del día: congelamos la mañana para que la
   // captura sea estable da igual la hora a la que se ejecute.
   await page.addInitScript(() => {

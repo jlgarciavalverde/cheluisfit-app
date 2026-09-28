@@ -39,6 +39,30 @@ test.describe("Fuerza · biblioteca", () => {
   });
 });
 
+test.describe("Fuerza · imágenes del catálogo", () => {
+  test("un ejercicio sin foto propia enseña su GIF, y los que no tienen ninguna imagen no se ofrecen", async ({ page }) => {
+    await page.route("https://static.exercisedb.dev/**", (route) =>
+      route.fulfill({ body: Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"), contentType: "image/gif" }),
+    );
+    // Un ejercicio con GIF y otro oculto (sin imagen), sacados del propio catálogo generado.
+    const catalog = (await import("../src/data/catalogGen.json", { with: { type: "json" } })).default as { name: string; frames?: string[]; gif?: string; hidden?: boolean }[];
+    const names = new Map<string, number>();
+    for (const e of catalog) names.set(e.name, (names.get(e.name) ?? 0) + 1);
+    const withGif = catalog.find((e) => e.gif && !e.frames && names.get(e.name) === 1 && e.name.length < 40)!;
+    const hidden = catalog.find((e) => e.hidden && names.get(e.name) === 1 && !catalog.some((o) => !o.hidden && o.name.startsWith(e.name)))!;
+
+    await page.goto("/fuerza");
+    await page.getByRole("tab", { name: "Ejercicios" }).click();
+    await page.getByTestId("ex-search").fill(withGif.name);
+    await page.getByText(withGif.name, { exact: true }).first().click();
+    await expect(page.getByTestId("exercise-gif")).toBeVisible();
+
+    await page.goBack();
+    await page.getByTestId("ex-search").fill(hidden.name);
+    await expect(page.getByText(hidden.name, { exact: true })).toHaveCount(0);
+  });
+});
+
 test.describe("Fuerza · rutinas", () => {
   test("crear una rutina con ejercicios, configurarla y verla en la lista", async ({ page }) => {
     await page.goto("/fuerza");

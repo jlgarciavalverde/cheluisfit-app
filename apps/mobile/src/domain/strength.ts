@@ -117,6 +117,13 @@ export interface Exercise {
   kind: ExerciseKind;
   /** Fotos (posición inicial y final): se alternan como un GIF. */
   frames?: string[];
+  /** GIF animado (URL completa), cuando no hay fotos propias del ejercicio (ExerciseDB). */
+  gif?: string;
+  /**
+   * Del catálogo, pero sin foto ni GIF en ninguna fuente: no sale en listas ni búsquedas; sigue
+   * existiendo por id para rutinas y entrenos que ya lo usaran.
+   */
+  hidden?: boolean;
   /** Vídeo propio (tiene prioridad sobre las fotos). */
   video?: string;
   source: "catalog" | "own" | "custom";
@@ -884,7 +891,7 @@ export function suggestSubstitutes(
   excludeIds: readonly string[] = [],
 ): Exercise[] {
   const scored = all
-    .filter((e) => e.id !== target.id && !excludeIds.includes(e.id))
+    .filter((e) => e.id !== target.id && !excludeIds.includes(e.id) && !e.hidden)
     .map((e) => {
       const primary = e.primary.filter((m) => target.primary.includes(m)).length;
       const secondary = e.secondary.filter((m) => target.secondary.includes(m) || target.primary.includes(m)).length;

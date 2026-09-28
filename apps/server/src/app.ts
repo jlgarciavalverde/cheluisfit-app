@@ -41,7 +41,8 @@ export async function buildApp(cfg: AppConfig): Promise<App> {
         styleSrc: ["'self'", "'unsafe-inline'"],
         // Las fotos del catálogo de ejercicios se cargan de sus fuentes (`exerciseCatalog.ts`):
         // sin estas dos, la versión web no enseñaba ninguna.
-        imgSrc: ["'self'", "data:", "blob:", "https://raw.githubusercontent.com", "https://wger.de"],
+        // y los GIF de ExerciseDB (enlazados, no copiados: ver AGENTS.md → catálogo).
+        imgSrc: ["'self'", "data:", "blob:", "https://raw.githubusercontent.com", "https://wger.de", "https://static.exercisedb.dev"],
         fontSrc: ["'self'", "data:"],
         // La versión web llama en directo a Open Food Facts y USDA FoodData Central desde el
         // cliente (`offClient.ts`/`usdaClient.ts`, sin pasar por este servidor) — sin esto, un

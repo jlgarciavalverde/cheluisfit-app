@@ -166,7 +166,7 @@ export default function ExerciseDetailScreen() {
           </Section>
         ) : null}
         <Text variant="caption" color="faint">
-          Catálogo de ejercicios: Exercise data by RepDB (repdb.co), hasaneyldrm/exercises-dataset (MIT), wger (CC-BY-SA) y free-exercise-db.
+          Catálogo de ejercicios: Exercise data by RepDB (repdb.co), hasaneyldrm/exercises-dataset (MIT), wger (CC-BY-SA) y free-exercise-db.{ex.gif && !ex.frames?.length ? " Animación: AscendAPI / ExerciseDB (ascendapi.com) · © Gym visual (gymvisual.com)." : ""}
         </Text>
       </View>
     </Screen>

@@ -208,6 +208,10 @@ function fromHv(data) {
       equipment: HV_EQUIPMENT[e.equipment] ?? "other",
       kind: inferKind(e.name, HV_EQUIPMENT[e.equipment] ?? "other", "weight_reps"),
       instructionsEs: e.instruction_steps?.es?.length ? e.instruction_steps.es : undefined,
+      // GIF animado de ExerciseDB (mismo id que hasaneyldrm: `media_id` = `exerciseId`). Se enlaza,
+      // no se copia: su API gratuita permite apps no comerciales con atribución a AscendAPI; los
+      // GIF son © Gym visual (ver AGENTS.md → catálogo).
+      gif: e.media_id ? `edb:${e.media_id}` : undefined,
     });
   }
   return out;
@@ -243,7 +247,12 @@ function fromFed(data) {
   for (const e of data) {
     const primary = pickMuscles(e.primaryMuscles ?? [], FED_MUSCLE);
     if (!primary.length) continue;
+    // El id del ejercicio no cambia (lo usan rutinas ya guardadas), pero la carpeta de las fotos es
+    // la del repositorio real (`folder`, de su `dist/exercises.json`): «3/4 Sit-Up» vive en
+    // `3_4_Sit-Up/`, no en `3/4_Sit-Up/` — así 34 fichas enlazaban imágenes que daban 404.
     const id = e.name.replace(/ /g, "_");
+    const folder = e.folder ?? id;
+    const count = e.imageCount ?? 2;
     out.push({
       src: "fed", id: `fed:${id}`, nameEn: e.name, nameEs: null, // se traduce después
       aliases: [e.name],
@@ -251,7 +260,7 @@ function fromFed(data) {
       equipment: FED_EQUIPMENT[e.equipment] ?? "other",
       kind: inferKind(e.name, FED_EQUIPMENT[e.equipment] ?? "other", e.equipment === "body only" ? "bodyweight" : "weight_reps"),
       compound: e.mechanic === "compound" ? true : e.mechanic === "isolation" ? false : undefined,
-      frames: [0, 1].map((n) => `${BASE}/${id}/${n}.jpg`),
+      frames: count > 0 ? Array.from({ length: Math.min(count, 2) }, (_, n) => `${BASE}/${folder}/${n}.jpg`) : undefined,
     });
   }
   return out;
@@ -272,6 +281,7 @@ function mergeInto(index, candidates) {
     if (existing.src === c.src) { stats.dupSelf++; continue; } // duplicado dentro de la fuente
     // La que ya estaba (mayor prioridad) gana; la de abajo aporta lo que le falte.
     if (!existing.frames && c.frames) existing.frames = c.frames;
+    if (!existing.gif && c.gif) existing.gif = c.gif;
     if (!existing.instructionsEs && c.instructionsEs) existing.instructionsEs = c.instructionsEs;
     if (existing.nameEs === null && c.nameEs) existing.nameEs = c.nameEs;
     for (const a of c.aliases) if (!existing.aliases.includes(a)) existing.aliases.push(a);
@@ -393,10 +403,52 @@ for (const e of all) {
   if (!first) { byEs.set(k, e); continue; }
   esDupes++;
   if (!first.frames && e.frames) first.frames = e.frames;
+  if (!first.gif && e.gif) first.gif = e.gif;
   if (!first.instructionsEs && e.instructionsEs) first.instructionsEs = e.instructionsEs;
   for (const a of e.aliases) if (!first.aliases.includes(a)) first.aliases.push(a);
 }
 console.log(`nombres en español repetidos (fusionados): ${esDupes}`);
+
+// Cruce por nombre para los que siguen sin foto ni GIF: si otro ejercicio con imagen tiene el mismo
+// conjunto de palabras (sin orden, sin palabras vacías, en singular) o se parece mucho (Dice ≥ 0,9)
+// con el mismo equipamiento, se usa su imagen. Umbral alto a propósito: con 0,8 salían parejas
+// falsas («Butterfly Sit Up» ≈ «Sit-Up»). El script imprime lo que rellena para revisarlo.
+const STOP = new Set(["the", "with", "on", "a", "an", "of", "and", "to", "in", "for", "v", "pov", "version"]);
+const SYN = { flye: "fly", flyes: "fly", dumbbells: "dumbbell", lever: "machine" };
+const toks = (name) =>
+  norm(name)
+    .split(" ")
+    .filter((t) => t && !STOP.has(t) && !/^\d+$/.test(t))
+    .map((t) => SYN[t] ?? (t.length > 3 && t.endsWith("s") ? t.slice(0, -1) : t));
+const dice = (a, b) => {
+  const A = new Set(a), B = new Set(b);
+  let n = 0;
+  for (const t of A) if (B.has(t)) n++;
+  return (2 * n) / (A.size + B.size || 1);
+};
+const withMedia = [...byEs.values()].filter((e) => e.frames || e.gif).map((e) => ({ e, keys: e.aliases.map(toks) }));
+const crossFilled = [];
+for (const e of byEs.values()) {
+  if (e.frames || e.gif) continue;
+  const mine = e.aliases.map(toks);
+  let best = null;
+  for (const cand of withMedia) {
+    for (const k of cand.keys) {
+      for (const m of mine) {
+        const exact = k.length === m.length && [...k].sort().join(" ") === [...m].sort().join(" ");
+        const d = exact ? 1 : cand.e.equipment === e.equipment ? dice(k, m) : 0;
+        if (d >= 0.9 && (!best || d > best.d)) best = { d, c: cand.e };
+      }
+    }
+  }
+  if (best) {
+    if (best.c.frames) e.frames = best.c.frames;
+    else e.gif = best.c.gif;
+    crossFilled.push(`${e.nameEn}  ←  ${best.c.nameEn} (${best.d.toFixed(2)})`);
+  }
+}
+console.log(`cruce por nombre: ${crossFilled.length} rellenados`);
+writeFileSync(join(CACHE, "cross-fill-review.txt"), crossFilled.join("\n") + "\n");
 
 // Las URLs de las fotos se guardan con un prefijo corto (`exerciseCatalog.ts` las expande):
 // ~290 KB menos en el paquete.
@@ -427,6 +479,10 @@ const out = [...byEs.values()].map((e) => {
     source: "catalog",
     ...(e.compound !== undefined ? { compound: e.compound } : {}),
     ...(e.frames ? { frames: e.frames.map(shortFrame) } : {}),
+    ...(e.gif ? { gif: e.gif } : {}),
+    // Sin foto ni GIF en ninguna fuente: se oculta de las listas y la búsqueda, pero sigue
+    // existiendo por id para rutinas o entrenos que ya lo usaran (ver `exerciseCatalog.ts`).
+    ...(!e.frames && !e.gif ? { hidden: true } : {}),
   };
   assertDomain(ex, e.src);
   return ex;
@@ -443,6 +499,9 @@ const byEq = {};
 for (const e of out) byEq[e.equipment] = (byEq[e.equipment] ?? 0) + 1;
 console.log("por equipamiento:", byEq);
 const withFrames = out.filter((e) => e.frames).length;
+const onlyGif = out.filter((e) => !e.frames && e.gif).length;
+const hiddenN = out.filter((e) => e.hidden).length;
+console.log(`imagen: ${withFrames} con foto · ${onlyGif} solo con GIF · ${hiddenN} ocultos (sin imagen) → visibles ${out.length - hiddenN}, todos con imagen`);
 const withInstr = Object.keys(instructions).length;
 const byKind = {};
 for (const e of out) byKind[e.kind] = (byKind[e.kind] ?? 0) + 1;

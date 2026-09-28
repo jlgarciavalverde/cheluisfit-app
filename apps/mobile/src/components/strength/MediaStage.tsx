@@ -39,14 +39,34 @@ function FrameStage({ frames, label }: { frames: string[]; label: string }) {
   );
 }
 
-/** Foto/GIF/vídeo del ejercicio. El vídeo propio manda; si no, las fotos alternando. */
+/**
+ * GIF animado (ExerciseDB, 180×180): entero y centrado (`contain`; recortarlo lo estropea) y sin
+ * el ciclo de fotogramas. Con «reducir movimiento», parado en su primer fotograma. Caché en disco:
+ * se descarga una vez por ejercicio.
+ */
+function GifStage({ uri, label }: { uri: string; label: string }) {
+  const reduce = useReducedMotion();
+  return (
+    <Image
+      testID="exercise-gif"
+      source={{ uri }}
+      contentFit="contain"
+      autoplay={!reduce}
+      cachePolicy="disk"
+      accessibilityLabel={label}
+      style={{ width: "100%", height: "100%" }}
+    />
+  );
+}
+
+/** Foto/GIF/vídeo del ejercicio: vídeo propio → fotos alternando → GIF → marcador. */
 export function MediaStage({
   exercise,
   height = 190,
   onPress,
   rounded = true,
 }: {
-  exercise: Pick<Exercise, "name" | "frames" | "video">;
+  exercise: Pick<Exercise, "name" | "frames" | "video" | "gif">;
   height?: number;
   onPress?: () => void;
   rounded?: boolean;
@@ -69,6 +89,8 @@ export function MediaStage({
         <VideoStage uri={exercise.video} />
       ) : exercise.frames && exercise.frames.length > 0 ? (
         <FrameStage frames={exercise.frames} label={label} />
+      ) : exercise.gif ? (
+        <GifStage uri={exercise.gif} label={label} />
       ) : (
         <View style={{ flex: 1, width: "100%", alignItems: "center", justifyContent: "center", backgroundColor: c.surfaceAlt }}>
           <Icon name="barbell-outline" size="hero" color="faint" />
@@ -85,7 +107,7 @@ export function MediaStage({
 }
 
 /** Miniatura cuadrada (primera foto o vídeo no: solo foto/placeholder para listas ligeras). */
-export function ExerciseThumb({ exercise, size = 56 }: { exercise: Pick<Exercise, "name" | "frames">; size?: number }) {
+export function ExerciseThumb({ exercise, size = 56 }: { exercise: Pick<Exercise, "name" | "frames" | "gif">; size?: number }) {
   const { c } = useTheme();
   return (
     <View
@@ -93,6 +115,9 @@ export function ExerciseThumb({ exercise, size = 56 }: { exercise: Pick<Exercise
     >
       {exercise.frames?.[0] ? (
         <Image source={{ uri: exercise.frames[0] }} contentFit="cover" accessibilityLabel={exercise.name} style={{ width: "100%", height: "100%" }} />
+      ) : exercise.gif ? (
+        // Parado: una lista de 50 ejercicios no debe reproducir 50 GIF a la vez.
+        <Image source={{ uri: exercise.gif }} contentFit="contain" autoplay={false} cachePolicy="disk" accessibilityLabel={exercise.name} style={{ width: "100%", height: "100%" }} />
       ) : (
         <Icon name="barbell-outline" size={size >= 56 ? "lg" : "md"} color="faint" />
       )}

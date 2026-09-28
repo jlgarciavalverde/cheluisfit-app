@@ -42,6 +42,8 @@ function haystack(e: Exercise): string[] {
 export function filterExercises(list: readonly Exercise[], f: ExerciseFilter): Exercise[] {
   const tokens = normalizeText(f.query ?? "").split(" ").filter(Boolean).map(stem);
   const filtered = list
+    // Los del catálogo sin ninguna imagen no se ofrecen (sí siguen existiendo por id).
+    .filter((e) => !e.hidden)
     .filter((e) => (f.group && f.group !== "all" ? e.primary.some((m) => groupOf(m) === f.group) : true))
     .filter((e) => (f.equipment && f.equipment !== "all" ? e.equipment === f.equipment : true))
     .filter((e) => (f.withVideo ? !!e.video : true));

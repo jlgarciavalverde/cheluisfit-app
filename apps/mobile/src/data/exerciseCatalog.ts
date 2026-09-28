@@ -159,9 +159,17 @@ const expandFrame = (f: string) => {
   return f;
 };
 
+/** GIF de ExerciseDB (`edb:<exerciseId>`): 180×180, se enlazan desde su servidor (ver AGENTS.md). */
+export const EXERCISEDB_GIF_BASE = "https://static.exercisedb.dev/media/";
+const expandGif = (g: string) => (g.startsWith("edb:") ? `${EXERCISEDB_GIF_BASE}${g.slice(4)}.gif` : g);
+
 const generated = (catalogGen as Exercise[])
   .filter((e) => !seedIds.has(e.id) && [e.name, ...e.aliases].every((n) => !seedKeys.has(normKey(n))))
-  .map((e) => (e.frames ? { ...e, frames: e.frames.map(expandFrame) } : e));
+  .map((e) => ({
+    ...e,
+    ...(e.frames ? { frames: e.frames.map(expandFrame) } : {}),
+    ...(e.gif ? { gif: expandGif(e.gif) } : {}),
+  }));
 
 export const CATALOG: Exercise[] = [...CATALOG_SEED, ...generated];
 

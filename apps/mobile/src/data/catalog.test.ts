@@ -5,7 +5,7 @@ import catalogGen from "./catalogGen.json";
 import instructions from "./catalogInstructions.json";
 import { CATALOG, CATALOG_BY_ID } from "./exerciseCatalog";
 
-type Gen = { id: string; name: string; aliases: string[]; equipment: string; kind: string; frames?: string[] };
+type Gen = { id: string; name: string; aliases: string[]; equipment: string; kind: string; frames?: string[]; gif?: string; hidden?: boolean };
 const gen = catalogGen as Gen[];
 
 describe("catálogo de ejercicios", () => {
@@ -37,5 +37,29 @@ describe("catálogo de ejercicios", () => {
     for (const e of CATALOG) for (const f of e.frames ?? []) expect(f.startsWith("https://")).toBe(true);
     expect(Object.keys(instructions).length).toBeGreaterThan(1000);
     expect(Object.keys(instructions).every((id) => CATALOG_BY_ID.has(id) || gen.some((g) => g.id === id))).toBe(true);
+  });
+});
+
+describe("catálogo: imagen para todos los visibles", () => {
+  it("todo lo que se ofrece en listas tiene foto o GIF; lo oculto sigue existiendo por id", () => {
+    const visible = CATALOG.filter((e) => !e.hidden);
+    expect(visible.filter((e) => !(e.frames?.length || e.gif)).map((e) => e.name)).toEqual([]);
+    const hidden = gen.filter((g) => g.hidden);
+    expect(hidden.length).toBeGreaterThan(0);
+    for (const h of hidden) expect(h.frames ?? h.gif).toBeUndefined();
+    // Los ocultos siguen localizables por id (rutinas y entrenos antiguos); solo faltan los que
+    // se descartan por repetir un ejercicio de la semilla.
+    const byId = hidden.filter((h) => CATALOG_BY_ID.get(h.id)?.hidden).length;
+    expect(byId).toBeGreaterThan(hidden.length * 0.9);
+  });
+
+  it("las fotos de free-exercise-db usan la carpeta real (sin «/», «(» ni «,») y los GIF el formato de ExerciseDB", () => {
+    // «fed:<carpeta>/<n>.jpg»: la carpeta nunca lleva «/», «(», «)» ni «,» (las reales los cambian por «_»).
+    const bad = gen.flatMap((e) => e.frames ?? []).filter((f) => f.startsWith("fed:") && !/^fed:[^/(),]+\/\d\.jpg$/.test(f));
+    expect(bad).toEqual([]);
+    const gifs = gen.filter((e) => e.gif).map((e) => e.gif!);
+    expect(gifs.length).toBeGreaterThan(1000);
+    expect(gifs.every((g) => /^edb:[A-Za-z0-9]{7}$/.test(g))).toBe(true);
+    for (const e of CATALOG) if (e.gif) expect(e.gif).toMatch(/^https:\/\/static\.exercisedb\.dev\/media\/[A-Za-z0-9]{7}\.gif$/);
   });
 });

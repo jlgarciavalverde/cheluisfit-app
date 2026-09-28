@@ -1,0 +1,10 @@
+{
+  "name": "cheluisfit",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "mobile": "pnpm --filter mobile start",
+    "web": "pnpm --filter mobile web",
+    "typecheck": "pnpm --filter mobile typecheck"
+  }
+}

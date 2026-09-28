@@ -1,0 +1,21 @@
+node_modules
+.expo
+dist
+web-build
+*.log
+.DS_Store
+apps/mobile/android
+apps/mobile/ios
+.env
+.env.*
+*.jks
+*.keystore
+e2e/.data
+test-results
+playwright-report
+apps/server/data
+*.apk
+*.p12
+*.key
+# Plantilla sin secretos: sí se versiona.
+!.env.example

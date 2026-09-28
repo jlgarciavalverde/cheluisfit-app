@@ -1,0 +1,27 @@
+# Dependencias y compilaciones
+node_modules/
+dist/
+web-build/
+.expo/
+expo-env.d.ts
+
+# Nativo generado (Continuous Native Generation)
+/android
+/ios
+
+# Pruebas
+test-results/
+playwright-report/
+
+# Secretos y claves de firma
+.env
+.env.*
+*.jks
+*.keystore
+*.p12
+*.key
+*.mobileprovision
+
+# Sistema
+.DS_Store
+*.log

@@ -1,7 +1,8 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { create } from "zustand";
-import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
+import { persist, type StateStorage } from "zustand/middleware";
+import { guardedJSONStorage, guardRehydrate } from "./persistSafety";
 import { api, ApiError, type ApiHousehold, type ApiUser } from "./api";
 import { adoptNewAccount, pullAllBlobs, saveMeta, loadMeta } from "./blobSync";
 
@@ -118,7 +119,10 @@ export const useAuth = create<AuthState>()(
     }),
     {
       name: "cf_auth_v1",
-      storage: createJSONStorage(() => secureStorage),
+      // SecureStore puede fallar al descifrar (p. ej. tras cambiar el bloqueo de pantalla): con la
+      // lectura protegida se arranca sin sesión en vez de quedarse en la pantalla de carga.
+      storage: guardedJSONStorage(() => secureStorage),
+      onRehydrateStorage: guardRehydrate("cf_auth_v1"),
       partialize: (s) => ({ token: s.token, user: s.user, household: s.household, lastSyncedAt: s.lastSyncedAt }),
     },
   ),

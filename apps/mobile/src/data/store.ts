@@ -1,6 +1,6 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { guardedJSONStorage, guardRehydrate } from "./persistSafety";
 import { addDays, todayKey } from "@/domain/dates";
 import { calcTargets, scaleNutrients } from "@/domain/nutrition";
 import { checkTdeeAdjustment, effectiveAdjust, TDEE_CHECK_EVERY_DAYS, type TdeeProposal } from "@/domain/tdee";
@@ -291,7 +291,7 @@ export const useNutrition = create<NutritionState>()(
     }),
     {
       name: "cf_nutrition_v1",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: guardedJSONStorage(),
       version: 6,
       // v1 → v2: llegan los pesos y las comidas guardadas. v2 → v3: llega `fridge` (Nevera).
       // v3 → v4: llega `tdee` (ajuste adaptativo). v4 → v5: llegan `measurements` (medidas
@@ -303,9 +303,9 @@ export const useNutrition = create<NutritionState>()(
       // El aviso diario vive en el sistema, no en el blob: tras bajar los datos de la cuenta en
       // un móvil nuevo (o reinstalar), `remindMeals` puede venir activado sin nada programado.
       // Reprogramarlo al cargar es idempotente (`setMealReminder` cancela antes de crear).
-      onRehydrateStorage: () => (state) => {
-        if (state?.remindMeals) setMealReminder(true).catch(() => {});
-      },
+      onRehydrateStorage: guardRehydrate<NutritionState>("cf_nutrition_v1", (state) => {
+        if (state.remindMeals) setMealReminder(true).catch(() => {});
+      }),
     },
   ),
 );

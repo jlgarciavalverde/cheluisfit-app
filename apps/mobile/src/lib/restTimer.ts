@@ -16,15 +16,6 @@ export function ensureRestNotifications(): Promise<boolean> {
   if (!setup) {
     setup = (async () => {
       try {
-        N.setNotificationHandler({
-          // En primer plano ya avisa la propia pantalla (vibración + barra).
-          handleNotification: async () => ({
-            shouldShowBanner: false,
-            shouldShowList: false,
-            shouldPlaySound: false,
-            shouldSetBadge: false,
-          }),
-        });
         if (Platform.OS === "android") {
           await N.setNotificationChannelAsync(CHANNEL, {
             name: "Fin de descanso",
@@ -44,26 +35,36 @@ export function ensureRestNotifications(): Promise<boolean> {
   return setup;
 }
 
-/** Programa el aviso de fin de descanso; devuelve el id para poder cancelarlo. */
-export async function scheduleRestNotification(endsAtMs: number, body: string): Promise<string | null> {
+/**
+ * Identificador fijo: solo hay un descanso a la vez. Antes el id lo generaba el sistema y se
+ * guardaba en memoria; si la app se cerraba durante un descanso, al volver se programaba otro sin
+ * poder cancelar el primero (sonaba dos veces, o aunque se hubiera saltado el descanso).
+ */
+const REST_ID = "rest-timer";
+
+/** Programa (o reprograma) el aviso de fin de descanso. */
+export async function scheduleRestNotification(endsAtMs: number, body: string): Promise<void> {
   const N = notifications();
-  if (!N || endsAtMs <= Date.now() + 500) return null;
-  if (!(await ensureRestNotifications())) return null;
+  if (!N) return;
+  await cancelRestNotification();
+  if (endsAtMs <= Date.now() + 500) return;
+  if (!(await ensureRestNotifications())) return;
   try {
-    return await N.scheduleNotificationAsync({
-      content: { title: "Descanso terminado", body, sound: true },
+    await N.scheduleNotificationAsync({
+      identifier: REST_ID,
+      content: { title: "Descanso terminado", body, sound: true, data: { kind: "rest" } },
       trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(endsAtMs), channelId: CHANNEL },
     });
   } catch {
-    return null;
+    /* sin permiso o fallo del sistema */
   }
 }
 
-export async function cancelRestNotification(id: string | null): Promise<void> {
+export async function cancelRestNotification(): Promise<void> {
   const N = notifications();
-  if (!id || !N) return;
+  if (!N) return;
   try {
-    await N.cancelScheduledNotificationAsync(id);
+    await N.cancelScheduledNotificationAsync(REST_ID);
   } catch {
     /* ya no existe */
   }

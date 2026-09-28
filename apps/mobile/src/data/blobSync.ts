@@ -9,6 +9,7 @@
 // lo local que se iba a pisar se guarda aparte (`cf_conflict_backup_<clave>`), recuperable desde Más.
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, ApiError } from "./api";
+import { clearHydrationFailure, hydrationFailed } from "./persistSafety";
 import { useActiveWorkout } from "./activeWorkoutStore";
 import { useRunning } from "./runningStore";
 import { useStrength } from "./strengthStore";
@@ -255,6 +256,17 @@ export async function syncBlobs(token: string): Promise<SyncResult> {
       await download();
       conflicts.push(key);
     };
+
+    // Tienda que no se pudo leer en este arranque (`persistSafety.ts`): lo que tiene en memoria son
+    // datos vacíos o de ejemplo, nunca se sube. Si la cuenta tiene copia, se baja y queda arreglada.
+    if (hydrationFailed(key)) {
+      if (serverAt) {
+        await download();
+        clearHydrationFailure(key);
+        await saveMeta(meta);
+      }
+      continue;
+    }
 
     if (!m) {
       if (raw !== null) await upload(null);

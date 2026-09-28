@@ -39,7 +39,9 @@ export async function buildApp(cfg: AppConfig): Promise<App> {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "blob:"],
+        // Las fotos del catálogo de ejercicios se cargan de sus fuentes (`exerciseCatalog.ts`):
+        // sin estas dos, la versión web no enseñaba ninguna.
+        imgSrc: ["'self'", "data:", "blob:", "https://raw.githubusercontent.com", "https://wger.de"],
         fontSrc: ["'self'", "data:"],
         // La versión web llama en directo a Open Food Facts y USDA FoodData Central desde el
         // cliente (`offClient.ts`/`usdaClient.ts`, sin pasar por este servidor) — sin esto, un
@@ -72,6 +74,8 @@ export async function buildApp(cfg: AppConfig): Promise<App> {
     req.log.error(err);
     return reply.code(500).send({ error: "internal", message: "Algo ha fallado en el servidor" });
   });
+
+  app.addHook("onClose", async () => db.close());
 
   app.get("/health", async () => ({ status: "ok", version: cfg.version, uptime: Math.round(process.uptime()) }));
 

@@ -1,0 +1,19 @@
+# El contexto de `docker build` solo necesita el servidor y el export web de la app. Sin este
+# archivo se mandaban ~5 GB (node_modules, android/, el APK) y se colaba la base de datos de
+# desarrollo (apps/server/data) en la etapa de compilación.
+.git
+**/node_modules
+**/.env
+**/.env.*
+!deploy/.env.example
+apps/server/data
+apps/server/dist
+apps/mobile/android
+apps/mobile/ios
+apps/mobile/src
+apps/mobile/e2e
+apps/mobile/tools
+apps/mobile/test-results
+apps/mobile/assets
+apps/mobile/dist/*.apk
+apps/mobile/dist/version.json

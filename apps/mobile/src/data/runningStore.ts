@@ -1,12 +1,12 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { guardedJSONStorage, guardRehydrate } from "./persistSafety";
 import { todayKey } from "@/domain/dates";
 import { type Activity, applyTemplate, clearTemplate, cloneItems, matchPlanned, mergeImportedActivities, type Planned, type Template } from "@/domain/running";
 import { compactRoute } from "@/domain/route";
 import { api } from "./api";
 import { importNewActivities } from "./healthConnect";
-import { cancelWorkoutReminder, scheduleWorkoutReminder } from "@/lib/reminders";
+import { cancelWorkoutReminder, resyncWorkoutReminders, scheduleWorkoutReminder } from "@/lib/reminders";
 import { SEED_TEMPLATES, seedActivities, seedPlanned } from "./runningSeed";
 
 export interface RunningState {
@@ -80,6 +80,9 @@ const initial = () => ({
   dismissedExternalIds: [] as string[],
 });
 
+const resyncReminders = (s: Pick<RunningState, "planned" | "templates">) =>
+  resyncWorkoutReminders(s.planned, (tid) => s.templates.find((t) => t.id === tid)?.name ?? "Entrenamiento").catch(() => {});
+
 /** Tope de la lista de borradas: de sobra para la ventana de solape, sin crecer para siempre. */
 const MAX_DISMISSED = 500;
 
@@ -98,8 +101,10 @@ export const useRunning = create<RunningState>()(
         if (found) {
           set((s) => ({
             templates: s.templates.filter((t) => t.id !== id),
-            planned: s.planned.filter((p) => p.templateId !== id),
+            // Solo los planes pendientes: los ya hechos (con sesión enlazada) son historial.
+            planned: s.planned.filter((p) => p.templateId !== id || p.activityId),
           }));
+          resyncReminders(get());
         }
         return found;
       },
@@ -120,7 +125,10 @@ export const useRunning = create<RunningState>()(
         cancelWorkoutReminder(id).catch(() => {});
         return found;
       },
-      restorePlanned: (p) => set((s) => ({ planned: [...s.planned, p] })),
+      restorePlanned: (p) => {
+        set((s) => ({ planned: [...s.planned, p] }));
+        resyncReminders(get());
+      },
       updateActivity: (id, patch) => {
         const p = "route" in patch ? { ...patch, route: compactRoute(patch.route) } : patch;
         set((s) => ({ activities: s.activities.map((a) => (a.id === id ? { ...a, ...p } : a)) }));
@@ -211,7 +219,9 @@ export const useRunning = create<RunningState>()(
     }),
     {
       name: "cf_running_v1",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: guardedJSONStorage(),
+      // Tras cargar (arranque, o datos bajados de la cuenta): los avisos viven en el sistema, no en el blob.
+      onRehydrateStorage: guardRehydrate<RunningState>("cf_running_v1", (s) => resyncReminders(s)),
       version: 6,
       // Campos nuevos se rellenan desde `empty()`, nunca desde `initial()`: si no, una migración
       // metería actividades o plantillas de ejemplo entre los datos reales.

@@ -24,6 +24,8 @@ import { toast, ToastHost } from "@/components/ui/Toast";
 import { useAuth } from "@/data/authStore";
 import { useStoresHydrated } from "@/data/hydration";
 import { useOnboarding } from "@/data/onboardingStore";
+import { useAppUpdateCheck } from "@/data/appUpdate";
+import { onStorageProblem } from "@/data/persistSafety";
 import { useAutoSync } from "@/data/useAutoSync";
 import { ThemeProvider, useBreakpoint, useTheme } from "@/theme/ThemeProvider";
 
@@ -35,8 +37,11 @@ function Shell() {
   const token = useAuth((s) => s.token);
   const onboardingSeen = useOnboarding((s) => s.seen);
   useAutoSync();
+  useAppUpdateCheck();
   // Aviso de la sincronización (p. ej. ganó la versión de la cuenta y lo local quedó guardado en
   // Más): se enseña una vez como toast y se limpia; la copia recuperable sigue en Más → Cuenta.
+  // Avisos del almacenamiento local (no se pudo guardar, datos ilegibles…): ver `persistSafety.ts`.
+  useEffect(() => onStorageProblem((message) => toast(message)), []);
   const syncNotice = useAuth((s) => s.syncNotice);
   useEffect(() => {
     if (!syncNotice) return;
@@ -87,6 +92,9 @@ function Shell() {
     </>
   );
 }
+
+// Una pantalla que revienta al pintarse enseña esto en vez de cerrar la app (ver `ErrorScreen`).
+export { ErrorScreen as ErrorBoundary } from "@/components/ErrorScreen";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({

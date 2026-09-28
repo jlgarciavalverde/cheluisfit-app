@@ -706,3 +706,23 @@ describe("Strava (recorrido GPS)", () => {
     expect(sync.status).toBe(409);
   });
 });
+
+describe("copias de seguridad y sesiones", () => {
+  it("backupDb escribe la copia del día sin dejar .tmp y conserva solo las últimas", async () => {
+    const { backupDb } = await import("./backup");
+    const { mkdtempSync, readdirSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "cf-backup-"));
+    for (let d = 1; d <= 4; d++) backupDb(app.db, dir, 3, new Date(`2026-09-0${d}T10:00:00Z`));
+    backupDb(app.db, dir, 3, new Date("2026-09-04T18:00:00Z")); // mismo día: se sustituye
+    expect(readdirSync(dir).sort()).toEqual(["cheluisfit-2026-09-02.db", "cheluisfit-2026-09-03.db", "cheluisfit-2026-09-04.db"]);
+  });
+
+  it("purgeExpiredSessions borra solo las caducadas", async () => {
+    const { purgeExpiredSessions } = await import("./auth");
+    const future = Date.now() + 200 * 24 * 3600 * 1000;
+    expect(purgeExpiredSessions(app.db, Date.now())).toBe(0);
+    expect(purgeExpiredSessions(app.db, future)).toBeGreaterThan(0);
+  });
+});

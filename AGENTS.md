@@ -544,6 +544,44 @@ web` (o `pnpm e2e`, que ya lo hace) para tener `apps/mobile/dist/` al día.
   respuesta lleva `until` y el móvil avanza `lastStravaSync` solo hasta ahí (lo demás llega en
   la siguiente). Los recorridos se reducen a 300 puntos con 5 decimales ya en el servidor.
 
+## Robustez (desde la 0.12)
+
+- **Toda tienda con `persist` usa `guardedJSONStorage()` + `guardRehydrate(nombre)`**
+  (`data/persistSafety.ts`). En zustand 5 una lectura que falla (JSON corrupto, `migrate` que
+  lanza, entrada > 2 MB en Android, SecureStore que no descifra) deja la tienda sin cargar para
+  siempre, y `_layout.tsx` no pinta nada hasta que todas cargan: pantalla de carga infinita.
+  Con la protección, la tienda arranca vacía, queda **marcada como fallida** (copia del texto en
+  `<clave>__ilegible_<fecha>`, salvo la sesión, que lleva el token), `syncBlobs()` nunca la sube y
+  baja la copia de la cuenta si la hay. `useStoresHydrated()` además corta a los 5 s. Los fallos
+  al **escribir** (disco lleno) y los blobs de más de 1,5 MB avisan con un toast
+  (`onStorageProblem`, que escucha `_layout.tsx`; los avisos de antes de montar se encolan).
+  Tienda nueva con `persist` → usar lo mismo, o vuelve el riesgo.
+- **`ErrorBoundary`** exportado desde `app/_layout.tsx` (`components/ErrorScreen.tsx`, con sus
+  propios proveedores: sustituye al layout entero): «Reintentar» / «Volver a Hoy».
+- **AsyncStorage de Android a 50 MB** (`plugins/withAsyncStorageSize.js`; por defecto 6 MB, que
+  se llenaba en 2-3 años de uso). Comprobar tras prebuild: `grep AsyncStorage_db_size_in_MB
+  android/gradle.properties`.
+- **Notificaciones**: un único manejador de primer plano (`lib/notifications.ts`), que enseña todo
+  salvo el fin de descanso mientras se ve la `RestBar`. El descanso usa el id fijo `rest-timer`
+  (antes el id vivía en memoria y tras cerrar la app sonaba dos veces o no se podía cancelar).
+  Sin notificaciones reales (web, Expo Go) y fuera de la pantalla del entreno, avisa
+  `RestNotifier` con vibración + toast. `resyncWorkoutReminders()` (`lib/reminders.ts`) deja
+  programados justo los planes futuros: al cargar `cf_running_v1`, al borrar una plantilla y al
+  deshacer quitar un plan; **no pide permiso** (se pide al planificar).
+- **Aviso de APK nueva** (`data/appUpdate.ts`, `components/UpdateCallout.tsx` en Hoy y Más):
+  lee `/version.json` al abrir y al volver a primer plano (cada 12 h como mucho, solo Android).
+- **Despliegue** (`tools/deploy.mjs`): se niega si el export web es anterior al último cambio de
+  `apps/mobile/src`; pasa `pnpm -r typecheck` y `pnpm -r test` (`--skip-tests` para saltarlo);
+  copia `pre-<versión>-<ms>.db` con `VACUUM INTO` dentro del contenedor antes de reiniciar;
+  espera a `/health` con la versión nueva y, si no llega en ~60 s, **vuelve sola a la imagen
+  anterior**; el APK se publica solo después, con `.tmp` + `mv`. `.dockerignore` en la raíz.
+  Restaurar una copia: README → «Copias de seguridad y cómo restaurar».
+- **Servidor**: `backupDb` escribe a `.tmp` y renombra; cada copia purga las sesiones caducadas
+  (`purgeExpiredSessions`); `db.close()` al cerrar. CSP con `raw.githubusercontent.com` y
+  `wger.de` en `img-src` (las fotos del catálogo; sin eso la web no enseñaba ninguna — los e2e no lo
+  ven porque sirven la web sin Helmet).
+- **git** en la raíz desde 2026-09-28 (local, sin remoto, decisión del usuario). Un commit por versión.
+
 ## Trampas encontradas
 
 - **`docker-compose.yml` usa `env_file: .env`, que gana a la variable `ENV APP_VERSION` ya

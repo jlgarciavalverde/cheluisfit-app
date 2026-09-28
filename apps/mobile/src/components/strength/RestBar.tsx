@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { fmtDuration } from "@/domain/format";
 import { isRestOver, remainingS, restText } from "@/domain/strength";
+import { setRestScreenVisible } from "@/lib/notifications";
 import { useNow } from "@/lib/useNow";
 import { useTheme } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
@@ -20,6 +21,12 @@ export function RestBar({ defaultRestS }: { defaultRestS: number }) {
   const startManual = useActiveWorkout((s) => s.startRestManually);
   const now = useNow(250, !!rest);
   const alerted = useRef<number | null>(null);
+  // Mientras se ve esta barra, el aviso del sistema de fin de descanso no sale en primer plano
+  // (aquí ya se ve la cuenta atrás y vibra); en otra pantalla, sí (ver `lib/notifications.ts`).
+  useEffect(() => {
+    setRestScreenVisible(true);
+    return () => setRestScreenVisible(false);
+  }, []);
 
   const over = rest ? isRestOver(rest, now) : false;
   useEffect(() => {

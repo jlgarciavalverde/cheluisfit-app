@@ -64,6 +64,7 @@
       "expo-secure-store",
       "react-native-health-connect",
       "./plugins/withHealthConnectDelegate.js",
+      "./plugins/withAsyncStorageSize.js",
       [
         "expo-build-properties",
         {

@@ -64,6 +64,40 @@ export async function scheduleWorkoutReminder(plannedId: string, dateKey: string
   }
 }
 
+/**
+ * Deja programados exactamente los avisos de los planes futuros: cancela cualquier `workout-*`
+ * que quede (de planes borrados, de una plantilla eliminada…) y programa los que falten (planes
+ * bajados de la cuenta en un móvil nuevo, «Deshacer» de quitar un plan). **No pide permiso**: se
+ * llama al arrancar y tras sincronizar, momentos en que un diálogo del sistema molestaría; el
+ * permiso se pide al planificar (`scheduleWorkoutReminder`).
+ */
+export async function resyncWorkoutReminders(planned: readonly { id: string; date: string; templateId: string }[], titleFor: (templateId: string) => string): Promise<void> {
+  const N = loadNotifications();
+  if (!N) return;
+  try {
+    const perm = await N.getPermissionsAsync();
+    const scheduled = await N.getAllScheduledNotificationsAsync();
+    const wanted = new Map(
+      planned
+        .filter((p) => {
+          const [y, m, d] = p.date.split("-").map(Number);
+          return new Date(y!, m! - 1, d!, 8, 0, 0).getTime() > Date.now() + 60_000;
+        })
+        .map((p): [string, (typeof planned)[number]] => [`workout-${p.id}`, p]),
+    );
+    for (const n of scheduled) {
+      if (n.identifier.startsWith("workout-") && !wanted.has(n.identifier)) await N.cancelScheduledNotificationAsync(n.identifier);
+    }
+    if (!perm.granted) return;
+    const have = new Set(scheduled.map((n) => n.identifier));
+    for (const [identifier, p] of wanted) {
+      if (!have.has(identifier)) await scheduleWorkoutReminder(p.id, p.date, titleFor(p.templateId));
+    }
+  } catch {
+    /* best-effort, como el resto de avisos */
+  }
+}
+
 export async function cancelWorkoutReminder(plannedId: string): Promise<void> {
   const N = loadNotifications();
   if (!N) return;

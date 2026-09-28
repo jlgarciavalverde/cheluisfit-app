@@ -1,3 +1,4 @@
+import { purgeExpiredSessions } from "./auth";
 import { backupDb } from "./backup";
 import { buildApp } from "./app";
 
@@ -30,7 +31,7 @@ const app = await buildApp({
 // Copia diaria de la base de datos (se refresca cada 6 h; queda una por día, 14 días).
 const runBackup = () => {
   try {
-    app.log.info({ file: backupDb(app.db, `${DATA_DIR}/backups`) }, "backup ok");
+    app.log.info({ file: backupDb(app.db, `${DATA_DIR}/backups`), expiredSessions: purgeExpiredSessions(app.db) }, "backup ok");
   } catch (err) {
     app.log.error(err, "backup falló");
   }

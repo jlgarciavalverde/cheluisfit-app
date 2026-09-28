@@ -1,7 +1,7 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMemo } from "react";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { guardedJSONStorage, guardRehydrate } from "./persistSafety";
 import { todayKey } from "@/domain/dates";
 import {
   cloneRoutine,
@@ -110,7 +110,8 @@ export const useStrength = create<StrengthState>()(
     }),
     {
       name: "cf_strength_v1",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: guardedJSONStorage(),
+      onRehydrateStorage: guardRehydrate("cf_strength_v1"),
       version: 1,
       // Campos nuevos desde `empty()`, nunca desde `initial()` (metería rutinas de ejemplo).
       migrate: (persisted) => ({ ...empty(), ...(persisted as object) }) as StrengthState,

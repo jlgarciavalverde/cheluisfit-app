@@ -17,10 +17,36 @@ export function loadNotifications(): typeof NotificationsModule | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     cached = require("expo-notifications") as typeof NotificationsModule;
+    installForegroundHandler(cached);
   } catch {
     cached = null;
   }
   return cached;
+}
+
+/**
+ * Qué hacer con una notificación que llega con la app abierta. Un único manejador para todas (antes
+ * lo registraba el descanso y escondía también los recordatorios de comidas y entrenos): se ven
+ * todas, salvo la de fin de descanso **mientras se ve la barra de descanso** (`RestBar` ya avisa
+ * con vibración y la cuenta atrás). En otra pestaña, el aviso de descanso sí sale.
+ */
+let restScreenVisible = false;
+export function setRestScreenVisible(visible: boolean): void {
+  restScreenVisible = visible;
+}
+export const isRestScreenVisible = () => restScreenVisible;
+
+function installForegroundHandler(N: typeof NotificationsModule) {
+  try {
+    N.setNotificationHandler({
+      handleNotification: async (n) => {
+        const hide = n.request.content.data?.kind === "rest" && restScreenVisible;
+        return { shouldShowBanner: !hide, shouldShowList: !hide, shouldPlaySound: !hide, shouldSetBadge: false };
+      },
+    });
+  } catch {
+    // sin manejador se usa el comportamiento por defecto del sistema
+  }
 }
 
 /** ¿Hay notificaciones reales en este entorno? (No en Expo Go ni en la web.) */

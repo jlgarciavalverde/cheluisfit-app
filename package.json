@@ -5,6 +5,9 @@
   "scripts": {
     "mobile": "pnpm --filter mobile start",
     "web": "pnpm --filter mobile web",
-    "typecheck": "pnpm --filter mobile typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "e2e": "pnpm --filter mobile e2e",
+    "deploy": "node tools/deploy.mjs"
   }
 }

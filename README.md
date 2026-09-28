@@ -58,6 +58,30 @@ apps/server/src
 El plan completo (stack, decisiones, diseño de pantallas) está en
 `~/.claude/plans/merry-inventing-stearns.md`.
 
+## Copias de seguridad y cómo restaurar
+
+- **Automáticas**: el servidor hace una copia consistente (`VACUUM INTO`) cada 6 h en
+  `~/servicios/cheluisfit/data/backups/cheluisfit-AAAA-MM-DD.db` (una por día, 14 días) y
+  `tools/deploy.mjs` hace otra, `pre-<versión>-<ms>.db`, justo antes de cada actualización.
+- **Restaurar una copia** (en el VPS):
+  ```sh
+  cd ~/servicios/cheluisfit
+  docker compose stop
+  cp data/cheluisfit.db data/cheluisfit.db.antes-de-restaurar   # por si acaso
+  cp data/backups/<la copia>.db data/cheluisfit.db
+  rm -f data/cheluisfit.db-wal data/cheluisfit.db-shm             # si no, SQLite reaplicaría cambios posteriores
+  docker compose up -d
+  ```
+- **Volver a la versión anterior** si una actualización sale mal (el despliegue ya lo intenta solo
+  si `/health` no responde): `sed -i "s|image: cheluisfit:.*|image: cheluisfit:<anterior>|" docker-compose.yml`,
+  lo mismo con `APP_VERSION=` en `.env`, y `docker compose up -d` (las imágenes anteriores siguen
+  cargadas: `docker images cheluisfit`).
+- Las copias viven en el mismo disco que la base de datos: para una copia fuera del VPS,
+  `scp joseluis@192.168.18.7:servicios/cheluisfit/data/backups/*.db <destino>` de vez en cuando.
+- La **clave de firma del APK** (`~/.android-keystores/cheluisfit.jks` + `.properties`) solo
+  existe en este Mac: guárdala también cifrada fuera de él. Si se pierde, las actualizaciones
+  dejarían de instalarse encima y habría que desinstalar (perdiendo lo no sincronizado).
+
 ## Próximos pasos
 
 De lo más cercano a lo más lejano:

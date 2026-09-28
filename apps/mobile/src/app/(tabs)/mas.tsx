@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Share, View, Linking } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
+import { UpdateCallout } from "@/components/UpdateCallout";
 import { Badge, Button, Callout, Card, CheckRow, Chip, ConfirmSheet, Icon, ListGroup, ListRow, Section, SegmentedControl, Text } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { api, ApiError } from "@/data/api";
@@ -108,6 +109,7 @@ export default function MasScreen() {
     <Screen variant="tab" testID="screen-mas">
       <ScreenHeader title="Más" />
       <View style={{ gap: space.xl }}>
+        <UpdateCallout />
         <ListGroup>
           <ListRow icon="person-circle-outline" title={name} subtitle="Datos personales y objetivo de nutrición" chevron onPress={() => router.push("/objetivo")} />
           <ListRow icon="scale-outline" title="Peso corporal" subtitle="Registro y evolución" chevron onPress={() => router.push("/peso")} />

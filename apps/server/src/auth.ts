@@ -6,6 +6,13 @@ import { HttpError, toUser, type AuthUser } from "./http";
 const scryptAsync = promisify(scrypt) as (pw: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
 const SESSION_TTL_MS = 180 * 24 * 3600 * 1000;
+
+/** Borra las sesiones caducadas (solo se borraban al intentar usarlas; las abandonadas se acumulaban). */
+export function purgeExpiredSessions(db: DB, now = Date.now()): number {
+  const before = (get(db, "SELECT COUNT(*) AS n FROM sessions") as { n: number }).n;
+  run(db, "DELETE FROM sessions WHERE last_used_at < ?", now - SESSION_TTL_MS);
+  return before - (get(db, "SELECT COUNT(*) AS n FROM sessions") as { n: number }).n;
+}
 const TOUCH_EVERY_MS = 24 * 3600 * 1000;
 
 export async function hashPassword(pw: string): Promise<string> {

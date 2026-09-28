@@ -1,6 +1,6 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { guardedJSONStorage, guardRehydrate } from "./persistSafety";
 import { toDateKey } from "@/domain/dates";
 import {
   addDrop,
@@ -256,7 +256,8 @@ export const useActiveWorkout = create<ActiveState>()(
     }),
     {
       name: "cf_active_workout_v1",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: guardedJSONStorage(),
+      onRehydrateStorage: guardRehydrate("cf_active_workout_v1"),
       version: 1,
       // Sin `migrate`, subir `version` haría que zustand descartara lo guardado: se perdería un
       // entreno a medias. Al cambiar la forma, añadir aquí el paso concreto de esa versión.

@@ -152,16 +152,26 @@ motor (`checkTdee()` no hace nada mientras `targetsOverride !== null`), no compi
 mezclarlos haría ambiguo si un número lo puso la persona, la IA o el algoritmo. La cadencia
 semanal (`TDEE_CHECK_EVERY_DAYS`) se comprueba en `checkTdee()` (la tienda), no dentro de
 `checkTdeeAdjustment()` — así `lastCheckedAt` solo avanza cuando de verdad se evalúa, nunca en
-cada montaje de `nutricion.tsx`. **Dos sitios calculan el objetivo con el mismo ajuste**:
-`selectTargets()`/`useTargets()` (`data/store.ts`) para el uso normal, y `objetivo.tsx`'s propio
-`suggested` para la tarjeta "Resultado" — si se toca uno sin el otro, esa pantalla mostraría un
-número distinto al que de verdad se usa en Nutrición.
+cada montaje de `nutricion.tsx`. **Una sola cuenta del objetivo: `targetsFor()`
+(`domain/tdee.ts`)**, que usan `selectTargets()`/`useTargets()` (`data/store.ts`) y `objetivo.tsx`
+(antes eran tres copias). Correcciones de la 0.13 (tests en `tdee.test.ts`): el mantenimiento
+de referencia es **fórmula + ajuste ya aprendido** (antes cada semana volvía a proponer la
+corrección entera encima de la anterior hasta el tope); solo cuentan los **días completos**
+(≥ 40 % del mantenimiento y ≥ 800 kcal: los días con solo el desayuno apuntado bajaban el
+objetivo); si «sumar calorías de ejercicio» está activado, la media de kcal de ejercicio de la
+ventana se suma al gasto; el interruptor apaga de verdad el motor; `lastCheckedAt` solo avanza
+si había datos suficientes (`hasEnoughTdeeData`); cambiar objetivo o actividad descarta la
+propuesta pendiente. `calcTargets` tiene **suelo** (≥ metabolismo basal y ≥ 1.500/1.200 kcal en
+déficit) y calcula proteína y grasa sobre el **peso a IMC 25** si el IMC es mayor. Si la IA
+cambia solo las kcal, se recalculan los hidratos (`carbsFor`) y los límites (`limitsFor`).
 
 **PRs de running** (`domain/running.ts`'s `runningPRs()`): mismo espíritu que los récords de
 Fuerza pero mucho más simple (una carrera tiene una sola distancia/duración, no varias series) —
 la más larga, el mejor ritmo (carreras ≥1 km, para que un sprint corto de prueba no falsee la
-marca) y el mejor tiempo en 5K/10K/media maratón **por rango de distancia**
-(`DISTANCE_BUCKETS`), no por el número exacto (nadie corre 5.000,0 m clavados). Solo `type:
+marca) y el mejor tiempo en 5K/10K/media maratón: la carrera tiene que cubrir **al menos el 98 %
+de la distancia oficial** y se compara (y se enseña) el **tiempo llevado a la distancia oficial**
+(`prTimeS`). Hasta la 0.12 bastaba con 4,5 km para un «5K» y ganaba la de menos tiempo, así que
+una carrera más corta batía a un 5K de verdad más rápido. Solo `type:
 "run"` cuenta — las caminatas no compiten por ritmo. Pura función de lectura sobre
 `activities`, sin ningún aviso de "nuevo récord" al guardar (a diferencia de Fuerza): se enseña
 en la pestaña Progreso de Running como un resumen siempre actualizado, más simple que
@@ -487,8 +497,17 @@ web` (o `pnpm e2e`, que ya lo hace) para tener `apps/mobile/dist/` al día.
   "android.permission.health.READ_TOTAL_CALORIES_BURNED",
   "android.permission.health.READ_HEART_RATE",
   "android.permission.health.READ_ELEVATION_GAINED",
-  "android.permission.health.READ_EXERCISE_ROUTE"
+  "android.permission.health.READ_EXERCISE_ROUTE",
+  "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
   ```
+  **Qué se importa (0.13, tests en `healthConnect.test.ts`)**: duración **en movimiento** (se
+  restan los segmentos de pausa, como el ritmo del reloj); kcal **activas** (las totales incluyen
+  el basal, que ya está en el objetivo del día y se contaba dos veces; sin activas, total − basal
+  del rato); agregados **solo del mismo origen** que la sesión (`dataOriginFilter`); paginación con
+  `pageToken`; las sesiones ya conocidas no se vuelven a agregar; y las **vueltas** del reloj
+  (`lapsFrom`), que al vincular con una plantilla reciben el tipo de su paso si coinciden en
+  número (`applyTemplate`) — así «plan vs. real» funciona con datos reales. `matchPlanned` solo
+  empareja **carreras** (no caminatas) y primero por plantilla.
   (`READ_EXERCISE_ROUTE` es para «Ver recorrido»: consentimiento aparte por sesión.)
   Comprobar siempre tras `expo prebuild` que aparecen de verdad en
   `android/app/src/main/AndroidManifest.xml` (`grep "permission.health" ...`) — no basta con
@@ -581,6 +600,27 @@ web` (o `pnpm e2e`, que ya lo hace) para tener `apps/mobile/dist/` al día.
   `wger.de` en `img-src` (las fotos del catálogo; sin eso la web no enseñaba ninguna — los e2e no lo
   ven porque sirven la web sin Helmet).
 - **git** en la raíz desde 2026-09-28 (local, sin remoto, decisión del usuario). Un commit por versión.
+
+## Reglas de datos que fijó la 0.13 (no deshacer sin motivo)
+
+- **Editar una entrada reescala su propia copia** de nutrientes (`rescaleNutrients`), nunca vuelve
+  a la ficha del alimento; si solo cambia la comida, no se toca. La vista previa de la edición sale
+  de esa copia.
+- **Alimentos propios**: corregir uno tuyo lo edita en su sitio; corregir uno de fuera crea tu
+  versión con `replaces: <id original>`, que oculta el original en la búsqueda y gana en el
+  escáner (`saveFoodVersion`, que también pasa favoritos/recientes). `removeFood` + «Deshacer». Los
+  alimentos que crea la IA (`ai-…`) no salen en «Mis alimentos».
+- **Búsqueda** (`searchFoods`): un resultado de USDA ya usado sigue saliendo (se une por id con el
+  guardado); no se exigen palabras vacías («de», «con»…); orden propios → genéricos locales →
+  productos locales → USDA en vivo; sin esperas artificiales; `liveError` si USDA no responde (la
+  pantalla avisa «Sin conexión»). El escáner consulta todas las variantes del código a la vez,
+  solo de longitudes GTIN válidas, y vuelve a pedir a OFF las fichas que estaban vacías.
+- **Fuerza**: un entreno olvidado abierto termina 2 min después de la última serie si pasaron más
+  de 45 min (`plausibleEnd`); superseries desiguales descansan y vuelven al miembro con series
+  pendientes; sustituir conserva el plan; «Repetir» conserva la rutina de origen y el rango de las
+  series de trabajo; 1RM solo con ≤ 12 repeticiones; los drops no cuentan como serie; en los
+  ejercicios por tiempo se progresa sobre lo último aguantado y no hay «1RM».
+- **Números a la española** (`parseNum`): «1.000» = mil, «1.234,5» = 1234,5.
 
 ## Trampas encontradas
 

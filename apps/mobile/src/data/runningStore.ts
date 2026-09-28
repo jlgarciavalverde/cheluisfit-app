@@ -4,6 +4,8 @@ import { guardedJSONStorage, guardRehydrate } from "./persistSafety";
 import { todayKey } from "@/domain/dates";
 import { type Activity, applyTemplate, clearTemplate, cloneItems, matchPlanned, mergeImportedActivities, type Planned, type Template } from "@/domain/running";
 import { compactRoute } from "@/domain/route";
+import { bmr } from "@/domain/nutrition";
+import { useNutrition } from "./store";
 import { api } from "./api";
 import { importNewActivities } from "./healthConnect";
 import { cancelWorkoutReminder, resyncWorkoutReminders, scheduleWorkoutReminder } from "@/lib/reminders";
@@ -112,6 +114,8 @@ export const useRunning = create<RunningState>()(
       planTemplate: (templateId, date) => {
         const id = uid();
         set((s) => ({ planned: [...s.planned, { id, date, templateId }] }));
+        // Si ese día ya hay una carrera (planificar a posteriori), queda enlazada al momento.
+        get().relink();
         // Sin `await`: programar el aviso es un efecto secundario best-effort (Expo Go/web no
         // tienen notificaciones reales, ver `lib/notifications.ts`) — no debe bloquear ni poder
         // hacer fallar la propia acción de planificar, que es siempre local e inmediata.
@@ -197,7 +201,9 @@ export const useRunning = create<RunningState>()(
         const last = get().lastSync;
         const lastMs = last ? new Date(last).getTime() : NaN;
         const since = Number.isFinite(lastMs) ? new Date(lastMs - 7 * 86_400_000).toISOString() : null;
-        const imported = await importNewActivities(since);
+        const cur = get();
+        const knownIds = new Set([...cur.activities.map((a) => a.externalId).filter((x): x is string => !!x), ...cur.dismissedExternalIds]);
+        const imported = await importNewActivities(since, { knownIds, bmrKcalPerDay: bmr(useNutrition.getState().profile) });
         const { activities, addedCount } = mergeImportedActivities(get().activities, imported, () => `act-${uid()}`, get().dismissedExternalIds);
         if (addedCount > 0) set({ activities });
         set({ lastSync: new Date().toISOString() });

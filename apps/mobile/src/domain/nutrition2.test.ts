@@ -78,3 +78,22 @@ describe("peso", () => {
     expect(isPlausibleWeight(Number.NaN)).toBe(false);
   });
 });
+
+import { bmr as bmrOf, calcTargets as calcT, carbsFor as carbsOf } from "./nutrition";
+
+describe("objetivos: suelo de seguridad y peso de referencia", () => {
+  it("un déficit nunca baja del metabolismo basal ni de 1.200 kcal (mujer)", () => {
+    const p = { name: "", sex: "female" as const, age: 60, heightCm: 155, weightKg: 50, activity: 1.2 as const, goal: "lose" as const };
+    const t = calcT(p);
+    expect(t.kcal).toBeGreaterThanOrEqual(Math.max(1200, Math.round(bmrOf(p))));
+  });
+
+  it("con IMC alto, proteína y grasa sobre el peso a IMC 25, y queda sitio para los hidratos", () => {
+    const p = { name: "", sex: "male" as const, age: 40, heightCm: 175, weightKg: 130, activity: 1.375 as const, goal: "lose" as const };
+    const t = calcT(p);
+    const ref = 25 * 1.75 ** 2; // ≈ 76,6 kg
+    expect(t.protein).toBe(Math.round(ref * 2));
+    expect(t.carbs).toBeGreaterThan(100);
+    expect(carbsOf(t.kcal, t.protein, t.fat)).toBe(t.carbs);
+  });
+});

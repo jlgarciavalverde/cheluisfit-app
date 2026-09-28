@@ -35,6 +35,10 @@ function firstNumber(nutriments: Record<string, unknown>, ...keys: string[]): nu
 
 type OffProduct = {
   product_name?: string;
+  serving_quantity?: number | string;
+  serving_size?: string;
+  product_quantity?: number | string;
+  product_quantity_unit?: string;
   brands?: string;
   quantity?: string;
   image_url?: string;
@@ -82,14 +86,31 @@ function toFood(barcode: string, p: OffProduct): Food | null {
       satFat: firstNumber(nutriments, "saturated-fat_100g"),
       salt: firstNumber(nutriments, "salt_100g"),
     },
-    servings: [],
+    servings: servingsFrom(p),
     packageInfo: p.quantity || undefined,
     imageUrl: p.image_url || undefined,
     alcoholPer100,
   };
 }
 
-const FIELDS = "product_name,brands,quantity,nutriments,nutriscore_grade,image_url,completeness";
+const FIELDS = "product_name,brands,quantity,nutriments,nutriscore_grade,image_url,completeness,serving_quantity,serving_size,product_quantity,product_quantity_unit";
+
+/**
+ * Raciones de la ficha: la ración de la etiqueta y el envase entero (si no pasa de 2 kg). Antes
+ * todo producto escaneado salía por 100 g y había que calcular a mano «1 yogur», «1 lata»…
+ */
+export function servingsFrom(p: Pick<OffProduct, "serving_quantity" | "serving_size" | "product_quantity" | "product_quantity_unit">): Food["servings"] {
+  const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(",", ".")) : NaN);
+  const out: Food["servings"] = [];
+  const sq = num(p.serving_quantity);
+  if (Number.isFinite(sq) && sq > 0 && sq <= 2000) out.push({ label: `1 ración (${Math.round(sq)} g)`, grams: Math.round(sq) });
+  const pq = num(p.product_quantity);
+  const unit = (p.product_quantity_unit ?? "g").toLowerCase();
+  if (Number.isFinite(pq) && pq > 0 && pq <= 2000 && (unit === "g" || unit === "ml") && Math.round(pq) !== out[0]?.grams) {
+    out.push({ label: `Envase (${Math.round(pq)} ${unit})`, grams: Math.round(pq) });
+  }
+  return out;
+}
 
 /**
  * Busca un producto por código de barras en Open Food Facts.

@@ -38,6 +38,7 @@ export default function AddFoodScreen() {
   const [tab, setTab] = useState<Tab>("recents");
   const [results, setResults] = useState<Food[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [offline, setOffline] = useState(false);
 
   // `foods` por referencia: la búsqueda solo se relanza al cambiar el texto (antes, cada «+» o
   // cada alimento abierto cambiaba `foods` y volvía a buscar en USDA, con parpadeo incluido).
@@ -55,7 +56,9 @@ export default function AddFoodScreen() {
     const t = setTimeout(() => {
       searchFoods(q, foodsRef.current)
         .then((r) => {
-          if (!cancelled) setResults(r.foods);
+          if (cancelled) return;
+          setResults(r.foods);
+          setOffline(!!r.liveError);
         })
         .catch(() => {
           if (!cancelled) setResults([]);
@@ -75,7 +78,8 @@ export default function AddFoodScreen() {
     const pick = (ids: string[]) => ids.map((id) => byId.get(id)).filter((f): f is Food => !!f);
     if (tab === "recents") return pick(recents);
     if (tab === "favorites") return pick(favorites);
-    return foods.filter((f) => f.source === "user");
+    // Los alimentos que crea el asistente de IA al registrar una comida (`ai-…`) no son «tuyos».
+    return foods.filter((f) => f.source === "user" && !f.id.startsWith("ai-"));
   }, [tab, recents, favorites, foods, byId]);
 
   const open = (f: Food) => {
@@ -85,6 +89,13 @@ export default function AddFoodScreen() {
     router.push({ pathname: "/alimento/[id]", params: { id: f.id, meal, date, from: "anadir" } });
   };
   const quickAdd = (f: Food) => {
+    // Una ficha sin datos (muchas de Open Food Facts vienen vacías) no se añade a ciegas con 0 kcal:
+    // se abre para ver el aviso y corregirla.
+    const p = f.per100;
+    if (p.kcal === 0 && p.protein === 0 && p.carbs === 0 && p.fat === 0) {
+      open(f);
+      return;
+    }
     const grams = f.servings[0]?.grams ?? 100;
     const id = addEntry(f, grams, meal, date);
     toast(`${f.name} añadido a ${MEAL_LABEL[meal].toLowerCase()}`, {
@@ -136,6 +147,11 @@ export default function AddFoodScreen() {
       <View style={{ gap: space.sm, paddingBottom: space.sm }}>
         {searchRow}
         <SearchStatus query={query} loading={loading} count={results?.length ?? null} noun={["resultado", "resultados"]} />
+        {offline && searching && !loading ? (
+          <Text variant="caption" color="warning" numberOfLines={1} testID="search-offline">
+            Sin conexión: solo alimentos guardados en el móvil
+          </Text>
+        ) : null}
       </View>
       {searching ? (
         <FlatList

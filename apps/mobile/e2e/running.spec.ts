@@ -89,9 +89,10 @@ test.describe("Running", () => {
     await expect(page.getByText("Kilómetros por semana")).toBeVisible();
     await expect(page.getByText("Mejor ritmo")).toBeVisible();
     await expect(page.getByTestId("pr-longest")).toContainText("17,2 km"); // Tirada larga, la más larga de las de ejemplo
-    // De las 4 carreras de ejemplo entre 9-11 km (9,6/10,3/10,4/9,1 km), gana la más rápida en
-    // tiempo (9,6 km en 49:48), no la de mejor ritmo ni la más reciente.
-    await expect(page.getByTestId("pr-10k")).toContainText("49:48");
+    // Solo cuentan como 10K las de al menos 9,8 km (9,6 y 9,1 km no son un 10K), y se compara el
+    // tiempo llevado a 10 km: 10,3 km en 54:36 → 53:01 gana a 10,4 km en 55:18 → 53:10.
+    // (Antes ganaba la de 9,6 km en 49:48 solo por ser la de menos tiempo.)
+    await expect(page.getByTestId("pr-10k")).toContainText("53:01");
   });
 
   test("registrar una carrera a mano: ritmo en vivo, avisos y borrado con deshacer", async ({ page }) => {

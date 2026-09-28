@@ -10,7 +10,7 @@ import { SEED_FOODS } from "@/data/seed";
 import { useNutrition } from "@/data/store";
 import { todayKey } from "@/domain/dates";
 import { fmtInt, fmtNum, parseNum } from "@/domain/format";
-import { nutrientIssues, scaleNutrients } from "@/domain/nutrition";
+import { nutrientIssues, rescaleNutrients, scaleNutrients } from "@/domain/nutrition";
 import { MEAL_LABEL, MEAL_SLOTS, type MealSlot } from "@/domain/types";
 import { space } from "@/theme/tokens";
 
@@ -50,7 +50,10 @@ export default function FoodDetailScreen() {
 
   const grams = parseNum(text);
   const valid = grams !== null && grams > 0 && grams <= 5000;
-  const n = scaleNutrients(food.per100, valid ? grams : 0);
+  // Al editar, la vista previa sale de la copia guardada en la entrada (lo que de verdad se
+  // guardará), no de la ficha actual del alimento, que puede haber cambiado desde entonces.
+  const n =
+    editing && entry && entry.grams > 0 ? rescaleNutrients(entry.nutrients, (valid ? grams : 0) / entry.grams) : scaleNutrients(food.per100, valid ? grams : 0);
   const issues = food.source === "user" ? [] : nutrientIssues(food.per100, food.alcoholPer100);
   const isFav = favorites.includes(food.id);
 

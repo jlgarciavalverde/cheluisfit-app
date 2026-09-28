@@ -1,6 +1,6 @@
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AppState, View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { DateNavigator } from "@/components/nutrition/DateNavigator";
 import { DaySummary, SecondaryLimits } from "@/components/nutrition/DaySummary";
@@ -11,6 +11,7 @@ import { toast } from "@/components/ui/Toast";
 import { useRunning } from "@/data/runningStore";
 import { useNutrition, useTargets } from "@/data/store";
 import { addDays, todayKey } from "@/domain/dates";
+import { TDEE_WINDOW_DAYS } from "@/domain/tdee";
 import { GOAL_LABEL, mealTargetKcal, sumNutrients, totalsByMeal } from "@/domain/nutrition";
 import { type Entry, MEAL_LABEL, MEAL_SLOTS, type MealSlot } from "@/domain/types";
 import { useBreakpoint } from "@/theme/ThemeProvider";
@@ -29,14 +30,32 @@ export default function NutricionScreen() {
   const removeEntry = useNutrition((s) => s.removeEntry);
   const restoreEntry = useNutrition((s) => s.restoreEntry);
   const copyMeal = useNutrition((s) => s.copyMeal);
+  const removeEntries = useNutrition((s) => s.removeEntries);
   const saveMeal = useNutrition((s) => s.saveMeal);
-  const tdeePending = useNutrition((s) => s.tdee.pending);
+  const tdeePending = useNutrition((s) => (s.tdee.enabled ? s.tdee.pending : null));
   const checkTdee = useNutrition((s) => s.checkTdee);
   const applyTdeeProposal = useNutrition((s) => s.applyTdeeProposal);
   const dismissTdeeProposal = useNutrition((s) => s.dismissTdeeProposal);
 
+  // Al abrir y cada vez que la app vuelve a primer plano:
+  // - revisión del TDEE adaptativo (con la media de kcal de ejercicio de las 2 últimas semanas);
+  // - si se estaba viendo «hoy» y ya es otro día (la pestaña seguía abierta desde anoche), se pasa
+  //   al día nuevo: si no, «Añadir» apuntaba a ayer sin darse cuenta.
+  const openedOn = useRef(todayKey());
   useEffect(() => {
-    checkTdee();
+    const onActive = () => {
+      const now = todayKey();
+      if (openedOn.current !== now) {
+        setDate((d) => (d === openedOn.current ? now : d));
+        openedOn.current = now;
+      }
+      const from = addDays(now, -(TDEE_WINDOW_DAYS - 1));
+      const kcal = useRunning.getState().activities.filter((a) => a.date >= from && a.date <= now).reduce((x, a) => x + (a.kcal ?? 0), 0);
+      checkTdee(kcal / TDEE_WINDOW_DAYS);
+    };
+    onActive();
+    const sub = AppState.addEventListener("change", (st) => st === "active" && onActive());
+    return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -81,8 +100,9 @@ export default function NutricionScreen() {
           onDeleteEntry={del}
           canCopyYesterday={yesterday.some((e) => e.meal === slot)}
           onCopyYesterday={() => {
-            const n = copyMeal(addDays(date, -1), date, slot);
-            toast(`${n} ${n === 1 ? "alimento copiado" : "alimentos copiados"} de ayer`);
+            const ids = copyMeal(addDays(date, -1), date, slot);
+            const n = ids.length;
+            toast(`${n} ${n === 1 ? "alimento copiado" : "alimentos copiados"} de ayer`, n ? { actionLabel: "Deshacer", onAction: () => removeEntries(ids) } : undefined);
           }}
           onSaveMeal={() => setSaving(slot)}
         />

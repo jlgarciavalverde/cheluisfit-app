@@ -153,3 +153,29 @@ describe("búsqueda por código de barras", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2); // no se detuvo en la primera variante fallida
   });
 });
+
+describe("búsqueda: correcciones de la 0.13", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const usdaHit = { fdcId: 777, description: "CHICKEN, BROILER, BREAST", foodNutrients: [{ nutrientId: 1008, value: 120 }] };
+
+  it("un resultado de USDA ya usado sigue apareciendo (con su copia guardada)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ foods: [usdaHit] }) }));
+    const first = await searchFoods("pechuga", []);
+    const saved = first.foods.find((f) => f.id === "usda-777")!;
+    expect(saved).toBeDefined();
+    // Se usa y queda guardado en local (con el nombre en inglés, que no contiene «pechuga»).
+    const again = await searchFoods("pechuga", [saved]);
+    expect(again.foods.some((f) => f.id === "usda-777")).toBe(true);
+  });
+
+  it("las palabras vacías no se exigen: «yogur de fresa» encuentra «Yogur fresa»", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ foods: [] }) }));
+    const own = { id: "user-yf", name: "Yogur fresa", source: "user" as const, per100: { kcal: 90, protein: 4, carbs: 13, fat: 2, fiber: 0, sugars: 12, satFat: 1, salt: 0.1 }, servings: [] };
+    expect((await searchFoods("yogur de fresa", [own])).foods[0]?.id).toBe("user-yf");
+  });
+
+  it("sin red avisa de que solo se ve lo guardado", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    expect((await searchFoods("pollo", [])).liveError).toBe(true);
+  });
+});

@@ -344,7 +344,7 @@ describe("1RM, récords y volumen", () => {
     w.endedAt = "2026-09-21T10:45:00Z";
     const t = workoutTotals(w);
     expect(t.volume).toBe(600 + 480 + 540); // sin calentamiento ni la serie sin marcar
-    expect(t.workingSets).toBe(3);
+    expect(t.workingSets).toBe(2); // el drop es continuación de la serie anterior, no una serie más
     expect(t.reps).toBe(30);
     expect(t.durationS).toBe(45 * 60);
   });
@@ -730,5 +730,67 @@ describe("récords de un entreno", () => {
   it("el primer entreno de un ejercicio no tiene récords", () => {
     const only = w("a", "2026-09-01T10:00:00.000Z", [done(60, 10)]);
     expect(workoutPRs(only, [only])).toEqual([]);
+  });
+});
+
+
+import { cleanupForFinish as finishW, E1RM_MAX_REPS, recordsFrom as recs, replaceExercise as replaceEx, restDecision as restD, routineFromWorkout as fromWorkout, suggestNext as next, type SetLog as Log } from "./strength";
+
+describe("fuerza — correcciones de la 0.13", () => {
+  const doneAt = (kg: number, reps: number, iso: string): Log => ({ ...newSet("normal", kg, reps), kg, reps, done: true, completedAt: iso });
+
+  it("un entreno olvidado abierto no dura 14 horas: termina 2 min tras la última serie", () => {
+    const w = startWorkout(null, [], new Date("2026-09-21T10:00:00Z"), "2026-09-21");
+    w.exercises = [{ ...workoutExerciseFrom(ex("a")), sets: [doneAt(60, 10, "2026-09-21T10:50:00Z")] }];
+    const r = finishW(w, new Date("2026-09-22T00:30:00Z"));
+    expect(r.workout.endedAt).toBe("2026-09-21T10:52:00.000Z");
+    const recent = finishW(w, new Date("2026-09-21T11:00:00Z"));
+    expect(recent.workout.endedAt).toBe("2026-09-21T11:00:00.000Z");
+  });
+
+  it("superserie desigual: al acabar la ronda descansa y vuelve al miembro que aún tiene series", () => {
+    const a = { ...workoutExerciseFrom(ex("a")), supersetId: "ss", sets: [newSet("normal"), newSet("normal"), newSet("normal")] };
+    const b = { ...workoutExerciseFrom(ex("b")), supersetId: "ss", sets: [newSet("normal")] };
+    b.sets[0] = { ...b.sets[0]!, done: true };
+    a.sets[0] = { ...a.sets[0]!, done: true };
+    // Se marca la 2.ª serie de A: B ya no tiene series → no salta a B, descansa y sigue en A.
+    const d = restD([a, b], 0, 1);
+    expect(d.start).toBe(true);
+    expect(d.advanceTo).toBe(0);
+  });
+
+  it("sustituir conserva el plan del ejercicio sustituido", () => {
+    const w = startWorkout(null, [], new Date(), "2026-09-21");
+    const cur = workoutExerciseFrom(ex("a"));
+    cur.plan = { ...cur.plan, sets: [{ type: "normal", repMin: 5, repMax: 5 }, { type: "normal", repMin: 5, repMax: 5 }], restS: 180, rule: "linear" };
+    w.exercises = [cur];
+    const r = replaceEx(w, 0, ex("b"));
+    expect(r.exercises[0]!.plan).toMatchObject({ restS: 180, rule: "linear" });
+    expect(r.exercises[0]!.plan.sets).toHaveLength(2);
+  });
+
+  it("repetir usa el rango de las series de trabajo y conserva la rutina de origen", () => {
+    const w = startWorkout(null, [], new Date(), "2026-09-21");
+    const e = workoutExerciseFrom(ex("a"));
+    e.plan = { ...e.plan, sets: [{ type: "warmup", repMin: 8, repMax: 12 }, { type: "normal", repMin: 4, repMax: 6 }] };
+    e.sets = [doneAt(40, 8, "2026-09-21T10:00:00Z"), doneAt(100, 5, "2026-09-21T10:05:00Z")];
+    e.sets[0] = { ...e.sets[0]!, type: "warmup" };
+    w.exercises = [e];
+    w.routineId = "rt-orig";
+    const r = fromWorkout(w);
+    expect(r.id).toBe("rt-orig");
+    expect(r.exercises[0]!.sets.map((x) => [x.repMin, x.repMax])).toEqual([[4, 6], [4, 6]]);
+  });
+
+  it("el 1RM no cuenta series de más de 12 repeticiones", () => {
+    const r = recs([{ date: "d", sets: [doneAt(40, 30, "x"), doneAt(80, 5, "x")] }])!;
+    expect(E1RM_MAX_REPS).toBe(12);
+    expect(r.bestE1rm).toBeCloseTo(80 * (1 + 5 / 30), 1);
+  });
+
+  it("un ejercicio por tiempo progresa sobre lo último aguantado", () => {
+    const s = next([{ date: "d", sets: [doneAt(0, 75, "x"), doneAt(0, 70, "x")] }], { rule: "double", repMin: 30, repMax: 60, increment: 0, plannedSets: 2, kind: "duration" });
+    expect(s.action).toBe("increase");
+    expect(s.perSet[0]!.reps).toBe(80);
   });
 });

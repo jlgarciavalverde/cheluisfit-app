@@ -410,7 +410,10 @@ export function startWorkout(
 export function replaceExercise(w: Workout, index: number, next: Exercise): Workout {
   const cur = w.exercises[index];
   if (!cur) return w;
-  const replacement = { ...workoutExerciseFrom(next), replacedFrom: cur.exerciseId, supersetId: cur.supersetId };
+  // El sustituto hereda el plan del que sustituye (series, rango, descanso, regla): antes volvía al
+  // 3×8–12 con 75 s por defecto, y «Actualizar rutina» guardaba ese plan por defecto.
+  const inherited: RoutineExercise = { ...routineExerciseFor(next), sets: cur.plan.sets, restS: cur.plan.restS, rule: cur.plan.rule };
+  const replacement = { ...workoutExerciseFrom(next, inherited), replacedFrom: cur.exerciseId, supersetId: cur.supersetId };
   const hasDone = cur.sets.some((s) => s.done);
   if (!hasDone) {
     return { ...w, exercises: w.exercises.map((e, i) => (i === index ? replacement : e)) };
@@ -444,6 +447,24 @@ export interface FinishReport {
   removedExercises: number;
 }
 
+/** Si la última serie fue hace más de esto, el entreno se dejó abierto: no se cuenta el hueco. */
+export const FORGOTTEN_GAP_MS = 45 * 60 * 1000;
+
+/**
+ * Fin del entreno: ahora, salvo que la última serie marcada fuera hace más de 45 min (se olvidó
+ * pulsar «Terminar», o se retomó al día siguiente): entonces, la última serie + 2 min. Antes salían
+ * entrenos de 14 horas en el historial, en el resumen y en lo que se le cuenta a la IA.
+ */
+export function plausibleEnd(w: Workout, now: Date): Date {
+  const last = w.exercises
+    .flatMap((e) => e.sets)
+    .map((s) => (s.done && s.completedAt ? Date.parse(s.completedAt) : NaN))
+    .filter((t) => Number.isFinite(t))
+    .reduce((a, b) => Math.max(a, b), -Infinity);
+  if (!Number.isFinite(last) || now.getTime() - last <= FORGOTTEN_GAP_MS) return now;
+  return new Date(last + 2 * 60 * 1000);
+}
+
 /** Al terminar se quitan las series sin marcar y los ejercicios que se quedan vacíos. */
 export function cleanupForFinish(w: Workout, now: Date): FinishReport {
   const routineUpdate = routineUpdateFor(w);
@@ -460,7 +481,7 @@ export function cleanupForFinish(w: Workout, now: Date): FinishReport {
     exercises.push({ ...e, sets: kept });
   }
   return {
-    workout: { ...w, exercises: cleanSupersets(exercises), endedAt: now.toISOString(), routineUpdate },
+    workout: { ...w, exercises: cleanSupersets(exercises), endedAt: plausibleEnd(w, now).toISOString(), routineUpdate },
     removedSets,
     removedExercises,
   };
@@ -566,13 +587,22 @@ export function restDecision(exercises: readonly WorkoutExercise[], exIndex: num
   if (ex.supersetId) {
     const members = supersetMembers(exercises, ex.supersetId);
     const pos = members.indexOf(exIndex);
-    if (pos >= 0 && pos < members.length - 1) return { start: false, seconds: 0, advanceTo: members[pos + 1] };
-    return { start: true, seconds: restSecondsFor(ex.plan, set.type), advanceTo: members[0] };
+    // Solo cuentan los miembros a los que les queda alguna serie (sin contar la que se acaba de
+    // marcar): con superseries desiguales (A1 con más series que A2) se saltaba a uno ya terminado
+    // y nunca empezaba el descanso.
+    const pending = (i: number) => exercises[i]!.sets.some((s, j) => !s.done && !(i === exIndex && j === setIndex));
+    const nextInRound = members.slice(pos + 1).find(pending);
+    if (pos >= 0 && nextInRound !== undefined) return { start: false, seconds: 0, advanceTo: nextInRound };
+    const firstPending = members.find(pending);
+    return { start: true, seconds: restSecondsFor(ex.plan, set.type), advanceTo: firstPending };
   }
   return { start: true, seconds: restSecondsFor(ex.plan, set.type) };
 }
 
 // ------------------------------------------------------------------ Estimaciones y récords
+
+/** Por encima de estas repeticiones Epley sobreestima: esas series no cuentan para el 1RM ni sus récords. */
+export const E1RM_MAX_REPS = 12;
 
 /** 1RM estimado (Epley). Solo es fiable hasta ~12 repeticiones. */
 export function e1rm(kg: number, reps: number): number {
@@ -608,8 +638,10 @@ export function workoutTotals(w: Workout): WorkoutTotals {
   for (const e of w.exercises) {
     for (const s of e.sets) {
       if (!s.done || s.type === "warmup") continue;
-      workingSets += 1;
-      reps += s.reps ?? 0;
+      // Un drop es continuación de la serie anterior, no una serie más; y en un ejercicio por
+      // tiempo `reps` son segundos, no repeticiones.
+      if (s.type !== "drop") workingSets += 1;
+      if (e.kind !== "duration") reps += s.reps ?? 0;
       volume += setVolume(s);
     }
   }
@@ -642,7 +674,7 @@ export function recordsFrom(sessions: readonly SessionSets[]): Records | null {
     const kg = s.kg ?? 0;
     const reps = s.reps as number;
     rec.maxKg = Math.max(rec.maxKg, kg);
-    rec.bestE1rm = Math.max(rec.bestE1rm, e1rm(kg, reps));
+    if (reps <= E1RM_MAX_REPS) rec.bestE1rm = Math.max(rec.bestE1rm, e1rm(kg, reps));
     rec.bestSetVolume = Math.max(rec.bestSetVolume, kg * reps);
     const k = String(kg);
     rec.repsAtKg[k] = Math.max(rec.repsAtKg[k] ?? 0, reps);
@@ -683,7 +715,7 @@ export function findPRs(current: readonly SetLog[], rec: Records | null): PR[] {
     const reps = s.reps as number;
     if (kg > 0) {
       consider("weight", s, kg, rec.maxKg);
-      consider("e1rm", s, e1rm(kg, reps), rec.bestE1rm);
+      if (reps <= E1RM_MAX_REPS) consider("e1rm", s, e1rm(kg, reps), rec.bestE1rm);
       consider("volume", s, kg * reps, rec.bestSetVolume);
     }
     // Sin condición sobre `best.weight`: es del entreno entero, no de esta serie — con ella,
@@ -775,7 +807,9 @@ export function suggestNext(history: readonly SessionSets[], cfg: ProgressionCon
 
   const increase = (why: string): Suggestion => {
     if (cfg.kind === "duration") {
-      const target = cfg.repMax + 5;
+      // Sobre lo que de verdad se aguantó la última vez (antes, rango + 5 s para siempre).
+      const best = Math.max(cfg.repMax, ...last.map((s) => (s.reps as number) ?? 0));
+      const target = best + 5;
       return { action: "increase", perSet: fill(n, 0, target), reason: `${why} Pasa a ${target} segundos.` };
     }
     const next = ref + cfg.increment;
@@ -909,7 +943,7 @@ export function weeklySetsByMuscle(workouts: readonly Workout[], dates: readonly
   for (const w of workouts) {
     if (!dates.includes(w.date)) continue;
     for (const e of w.exercises) {
-      const n = e.sets.filter((s) => s.done && s.type !== "warmup").length;
+      const n = e.sets.filter((s) => s.done && s.type !== "warmup" && s.type !== "drop").length;
       if (n === 0) continue;
       for (const m of e.primary) out[m] = (out[m] ?? 0) + n;
       for (const m of e.secondary) out[m] = (out[m] ?? 0) + n * 0.5;
@@ -1000,12 +1034,17 @@ export function historyFor(workouts: readonly Workout[], exerciseId: string, exc
 /** Una rutina con los ejercicios y series de un entreno ya hecho (para «repetir el último»). */
 export function routineFromWorkout(w: Workout): Routine {
   return {
-    id: makeId("rt"),
+    // Mismo id que la rutina de origen (si la había): repetir cuenta para «Hoy toca».
+    id: w.routineId ?? makeId("rt"),
     name: w.name,
     exercises: w.exercises.map((e) => ({
       id: makeId("re"),
       exerciseId: e.exerciseId,
-      sets: e.sets.filter((s) => s.type !== "drop").map((s) => ({ type: s.type === "warmup" ? "warmup" : s.type === "failure" ? "failure" : "normal", repMin: e.plan.sets[0]?.repMin ?? 8, repMax: e.plan.sets[0]?.repMax ?? 12 }) as PlannedSet),
+      // Rango de las series de trabajo (antes el de la primera fila, que si era calentamiento daba 8–12).
+      sets: e.sets.filter((s) => s.type !== "drop").map((s) => {
+        const c = planCounts(e.plan.sets);
+        return { type: s.type === "warmup" ? "warmup" : s.type === "failure" ? "failure" : "normal", repMin: c.repMin, repMax: c.repMax } as PlannedSet;
+      }),
       restS: e.plan.restS,
       rule: e.plan.rule,
       increment: e.plan.increment,
@@ -1017,7 +1056,7 @@ export function routineFromWorkout(w: Workout): Routine {
 
 /** Mejor 1RM estimado de una lista de series (solo series de trabajo hechas). */
 export function bestE1rm(sets: readonly SetLog[]): number {
-  return Math.max(0, ...doneWork(sets).map((s) => e1rm(s.kg ?? 0, s.reps as number)));
+  return Math.max(0, ...doneWork(sets).filter((s) => (s.reps as number) <= E1RM_MAX_REPS).map((s) => e1rm(s.kg ?? 0, s.reps as number)));
 }
 
 // ------------------------------------------------------------------ Plan de una rutina

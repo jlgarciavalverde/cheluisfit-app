@@ -44,6 +44,9 @@ export function gtinVariants(code: string): string[] {
   for (const len of [8, 12, 13]) {
     if (stripped.length <= len) set.add(stripped.padStart(len, "0"));
   }
-  set.add(stripped);
+  // Solo longitudes GTIN reales (8, 12, 13, 14): una variante de 11 dígitos, por ejemplo, hace
+  // que Open Food Facts responda «invalid code» y el escaneo acababa en «error» en vez de
+  // «no encontrado».
+  if ([8, 12, 13, 14].includes(stripped.length)) set.add(stripped);
   return [...set];
 }

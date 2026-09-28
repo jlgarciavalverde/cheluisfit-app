@@ -100,8 +100,20 @@ async function layoutProblems(page: Page): Promise<string[]> {
       const r = el.getBoundingClientRect();
       return r.bottom > barRect.top && r.top < barRect.bottom;
     };
+    // Lo que una lista con scroll ya recorta (filas que siguen debajo del pie fijo) no se ve: no cuenta.
+    const clipped = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      const cy = r.top + r.height / 2;
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        const cs = getComputedStyle(p);
+        if (cs.overflowY === "visible" && cs.overflowX === "visible") continue;
+        const pr = p.getBoundingClientRect();
+        if (cy < pr.top || cy > pr.bottom) return true;
+      }
+      return false;
+    };
     const leaves = [...root.querySelectorAll("div, span")].filter(
-      (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim()) && visible(el) && !inHScroll(el) && !underBar(el),
+      (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim()) && visible(el) && !inHScroll(el) && !underBar(el) && !clipped(el),
     );
     const label = (el: Element) => {
       const t = (el.textContent ?? "").trim();
@@ -206,6 +218,19 @@ for (const [w, h] of [
     });
 
     test("los buscadores miden siempre lo mismo, escribas lo que escribas", async ({ page }) => {
+      // USDA simulado (sin red real) con nombres y marcas larguísimos: también estresa la lista.
+      await page.route("https://api.nal.usda.gov/**", (route) =>
+        route.fulfill({
+          json: {
+            foods: Array.from({ length: 20 }, (_, i) => ({
+              fdcId: 900000 + i,
+              description: `CHICKEN BREAST MARINATED WITH CITRUS AND HERBS FAMILY PACK NUMBER ${i}`,
+              brandOwner: "A VERY LONG BRAND OWNER NAME FOR TESTING PURPOSES INC",
+              foodNutrients: [{ nutrientId: 1008, value: 123 }],
+            })),
+          },
+        }),
+      );
       const inputs: [string, () => Promise<void>][] = [
         ["food-search", () => page.goto("/anadir?meal=lunch").then(() => undefined)],
         [

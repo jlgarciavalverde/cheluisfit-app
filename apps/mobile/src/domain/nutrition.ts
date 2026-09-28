@@ -67,25 +67,48 @@ export const GOAL_ADJUST: Record<Profile["goal"], number> = {
  * fibra ≈ 14 g por cada 1.000 kcal.
  */
 export function calcTargets(p: Profile, adjust: number = GOAL_ADJUST[p.goal]): Targets {
-  const kcal = roundTo(tdee(p) * (1 + adjust), 10);
+  // Suelo de seguridad: nunca por debajo del metabolismo basal ni de 1.500/1.200 kcal (hombre/
+  // mujer). Sin él, una mujer de 50 kg, 1,55 m y 60 años sedentaria «bajando peso» salía ~1.030.
+  const floor = Math.max(bmr(p), p.sex === "male" ? 1500 : 1200);
+  const kcal = roundTo(Math.max(tdee(p) * (1 + adjust), adjust < 0 ? floor : 0), 10);
   const proteinPerKg = p.goal === "lose" ? 2.0 : 1.8;
-  const protein = Math.round(p.weightKg * proteinPerKg);
-  const fat = Math.round(Math.max(p.weightKg * 0.9, (kcal * 0.2) / 9));
+  // Proteína y grasa por kg sobre el peso de referencia: con un IMC alto, el peso total las
+  // disparaba y no dejaba sitio a los hidratos. Por encima de IMC 25 se usa el peso a IMC 25.
+  const refKg = Math.min(p.weightKg, 25 * (p.heightCm / 100) ** 2);
+  const protein = Math.round(refKg * proteinPerKg);
+  const fat = Math.round(Math.max(refKg * 0.9, (kcal * 0.2) / 9));
   const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
   return {
     kcal,
     protein,
     carbs,
     fat,
-    fiber: Math.round((14 * kcal) / 1000),
-    sugarsMax: Math.round((kcal * 0.1) / 4),
-    satFatMax: Math.round((kcal * 0.1) / 9),
-    saltMax: 5,
+    ...limitsFor(kcal),
     mealSplit: { ...DEFAULT_MEAL_SPLIT },
   };
 }
 
+/** Fibra y límites que dependen solo de las kcal (sirven también para un objetivo puesto a mano). */
+export function limitsFor(kcal: number): Pick<Targets, "fiber" | "sugarsMax" | "satFatMax" | "saltMax"> {
+  return {
+    fiber: Math.round((14 * kcal) / 1000),
+    sugarsMax: Math.round((kcal * 0.1) / 4),
+    satFatMax: Math.round((kcal * 0.1) / 9),
+    saltMax: 5,
+  };
+}
+
+/** Hidratos que cuadran con unas kcal, proteína y grasa dadas (al cambiar solo las kcal). */
+export function carbsFor(kcal: number, protein: number, fat: number): number {
+  return Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+}
+
 /** Nutrientes para una cantidad en gramos a partir de los valores por 100 g. */
+/** Multiplica unos nutrientes ya calculados (la copia de una entrada) por `factor`. */
+export function rescaleNutrients(n: Nutrients, factor: number): Nutrients {
+  return scaleNutrients(n, factor * 100);
+}
+
 export function scaleNutrients(per100: Nutrients, grams: number): Nutrients {
   const f = grams / 100;
   return {

@@ -104,3 +104,17 @@ describe("fetchOffProduct", () => {
     await expect(fetchOffProduct("8480000123456")).rejects.toThrow(/no code or invalid code/);
   });
 });
+
+import { servingsFrom } from "./offClient";
+
+describe("raciones de Open Food Facts", () => {
+  it("ración de la etiqueta y envase, sin repetir ni aceptar tamaños absurdos", () => {
+    expect(servingsFrom({ serving_quantity: 125, product_quantity: 500, product_quantity_unit: "g" })).toEqual([
+      { label: "1 ración (125 g)", grams: 125 },
+      { label: "Envase (500 g)", grams: 500 },
+    ]);
+    expect(servingsFrom({ serving_quantity: "330", product_quantity: 330, product_quantity_unit: "ml" })).toEqual([{ label: "1 ración (330 g)", grams: 330 }]);
+    expect(servingsFrom({ product_quantity: 5000 })).toEqual([]);
+    expect(servingsFrom({})).toEqual([]);
+  });
+});

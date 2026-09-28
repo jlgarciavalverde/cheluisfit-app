@@ -76,6 +76,14 @@ export interface ActiveState {
 
 const MAX_REST_GAP_S = 30 * 60;
 
+function lastCompletedAt(w: Workout, exceptSetId: string): number | null {
+  const t = w.exercises
+    .flatMap((e) => e.sets)
+    .filter((x) => x.id !== exceptSetId && x.done && x.completedAt)
+    .map((x) => Date.parse(x.completedAt as string));
+  return t.length ? Math.max(...t) : null;
+}
+
 function mapEx(w: Workout, exIdx: number, fn: (e: WorkoutExercise) => WorkoutExercise): Workout {
   return { ...w, exercises: w.exercises.map((e, i) => (i === exIdx ? fn(e) : e)) };
 }
@@ -130,7 +138,7 @@ export const useActiveWorkout = create<ActiveState>()(
           workout,
           lastSetAt: now,
           rest: decision.start ? startRest(now, decision.seconds, setId) : null,
-          current: decision.advanceTo !== undefined && !decision.start ? decision.advanceTo : s.current,
+          current: decision.advanceTo ?? s.current,
         });
         return decision;
       },
@@ -144,6 +152,8 @@ export const useActiveWorkout = create<ActiveState>()(
               sets: e.sets.map((x) => (x.id === setId ? { ...x, done: false, completedAt: undefined, restS: undefined } : x)),
             })),
             rest: s.rest?.setId === setId ? null : s.rest,
+            // El descanso medido de la próxima serie cuenta desde la última que SIGUE marcada.
+            lastSetAt: lastCompletedAt(s.workout, setId),
           };
         }),
 

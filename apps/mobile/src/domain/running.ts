@@ -214,11 +214,22 @@ export const RUNNING_PR_LABEL: Record<RunningPRType, string> = {
 
 /** Tolerancia real: nadie corre exactamente 5.000,0 m — se acepta un rango razonable alrededor
  *  de la distancia oficial (mismo criterio que usan apps de referencia como Strava). */
-const DISTANCE_BUCKETS: { type: Extract<RunningPRType, "5k" | "10k" | "half_marathon">; minM: number; maxM: number }[] = [
-  { type: "5k", minM: 4500, maxM: 5500 },
-  { type: "10k", minM: 9000, maxM: 11000 },
-  { type: "half_marathon", minM: 20000, maxM: 22500 },
+const DISTANCE_BUCKETS: { type: Extract<RunningPRType, "5k" | "10k" | "half_marathon">; officialM: number; maxM: number }[] = [
+  { type: "5k", officialM: 5000, maxM: 5500 },
+  { type: "10k", officialM: 10000, maxM: 11000 },
+  { type: "half_marathon", officialM: 21097, maxM: 22500 },
 ];
+/** Hay que haber cubierto al menos el 98 % de la distancia: 4,5 km no son un 5K. */
+const MIN_BUCKET_FRACTION = 0.98;
+
+/**
+ * Tiempo de una carrera llevado a la distancia oficial (5.000 m, 10.000 m, 21.097 m): una de
+ * 5,3 km en 26:30 cuenta como 25:00 de 5K. Es lo que se compara y lo que se enseña como marca.
+ */
+export function prTimeS(a: Pick<Activity, "distanceM" | "durationS">, type: Extract<RunningPRType, "5k" | "10k" | "half_marathon">): number {
+  const b = DISTANCE_BUCKETS.find((x) => x.type === type)!;
+  return a.distanceM > 0 ? Math.round((a.durationS * b.officialM) / a.distanceM) : a.durationS;
+}
 
 /**
  * Marcas de running a partir del historial: la más larga, el mejor ritmo (carreras ≥1 km, para
@@ -230,11 +241,13 @@ export function runningPRs(activities: readonly Activity[]): Record<RunningPRTyp
   const runs = activities.filter((a) => a.type === "run");
   const longest = [...runs].sort((a, b) => b.distanceM - a.distanceM)[0] ?? null;
   const pacedRuns = runs.filter((a) => a.distanceM >= 1000);
-  const fastest_pace = [...pacedRuns].sort((a, b) => avgPace(a) - avgPace(b))[0] ?? null;
+  const fastest_pace = [...pacedRuns].filter((a) => a.durationS > 0).sort((a, b) => avgPace(a) - avgPace(b))[0] ?? null;
   const byBucket: Record<Extract<RunningPRType, "5k" | "10k" | "half_marathon">, Activity | null> = { "5k": null, "10k": null, half_marathon: null };
   for (const bucket of DISTANCE_BUCKETS) {
-    const inBucket = runs.filter((a) => a.distanceM >= bucket.minM && a.distanceM <= bucket.maxM);
-    byBucket[bucket.type] = [...inBucket].sort((a, b) => a.durationS - b.durationS)[0] ?? null;
+    // Antes se aceptaba desde 4,5 km y ganaba la de menos tiempo: una carrera más corta batía a un
+    // 5K de verdad más rápido. Ahora: distancia casi completa y tiempo llevado a la oficial.
+    const inBucket = runs.filter((a) => a.durationS > 0 && a.distanceM >= bucket.officialM * MIN_BUCKET_FRACTION && a.distanceM <= bucket.maxM);
+    byBucket[bucket.type] = [...inBucket].sort((a, b) => prTimeS(a, bucket.type) - prTimeS(b, bucket.type))[0] ?? null;
   }
   return { longest, fastest_pace, ...byBucket };
 }
@@ -253,6 +266,8 @@ export interface WeekTotals {
   weekStart: string;
   meters: number;
   seconds: number;
+  /** Segundos solo de las carreras con distancia: el denominador bueno para el ritmo. */
+  pacedSeconds: number;
   sessions: number;
 }
 
@@ -268,7 +283,7 @@ export function weeklyTotals(acts: readonly Activity[], today: string, weeks: nu
     const [y, m, d] = current.split("-").map(Number);
     const dt = new Date(y, m - 1, d - 7 * i, 12);
     const p = (n: number) => String(n).padStart(2, "0");
-    out.push({ weekStart: `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`, meters: 0, seconds: 0, sessions: 0 });
+    out.push({ weekStart: `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`, meters: 0, seconds: 0, pacedSeconds: 0, sessions: 0 });
   }
   for (const a of acts) {
     if (a.type !== "run") continue;
@@ -276,6 +291,9 @@ export function weeklyTotals(acts: readonly Activity[], today: string, weeks: nu
     if (w) {
       w.meters += a.distanceM;
       w.seconds += a.durationS;
+      // Para el ritmo solo cuenta el tiempo de las carreras con distancia (cinta sin distancia,
+      // permiso de distancia denegado): si no, el ritmo semanal salía más lento de lo real.
+      if (a.distanceM > 0) w.pacedSeconds += a.durationS;
       w.sessions += 1;
     }
   }
@@ -421,8 +439,16 @@ export function hrZoneOf(hr: number, maxHr: number): 0 | 1 | 2 | 3 | 4 | 5 {
 // ------------------------------------------------------------ Plan ↔ sesiones
 
 /** Enlaza una sesión con una plantilla y guarda la copia del plan de ese momento. */
+/**
+ * Vincula la sesión con la plantilla (guarda su copia). Si el reloj trae tantas vueltas como pasos
+ * tiene la plantilla, cada vuelta recibe el tipo de su paso (calentamiento, trabajo…): sin eso,
+ * «plan vs. real» nunca funcionaba con datos reales, porque ningún reloj dice qué vuelta era de
+ * trabajo.
+ */
 export function applyTemplate(a: Activity, t: Template): Activity {
-  return { ...a, templateId: t.id, plan: structuredClone(t) };
+  const steps = flattenTemplate(t);
+  const laps = a.laps && a.laps.length === steps.length ? a.laps.map((l, i) => (l.kind ? l : { ...l, kind: steps[i]!.kind })) : a.laps;
+  return { ...a, templateId: t.id, plan: structuredClone(t), ...(laps ? { laps } : {}) };
 }
 
 export function clearTemplate(a: Activity): Activity {
@@ -442,15 +468,25 @@ export function matchPlanned(
 ): { plannedId: string; activityId: string }[] {
   const used = new Set(planned.filter((p) => p.activityId).map((p) => p.activityId as string));
   const out: { plannedId: string; activityId: string }[] = [];
-  for (const p of [...planned].sort((a, b) => a.date.localeCompare(b.date))) {
-    if (p.activityId || p.date > today) continue;
-    const candidates = activities.filter((a) => a.date === p.date && !used.has(a.id));
-    if (candidates.length === 0) continue;
-    const pick =
-      candidates.find((a) => a.templateId === p.templateId) ??
-      [...candidates].sort((a, b) => b.distanceM - a.distanceM)[0];
-    used.add(pick.id);
-    out.push({ plannedId: p.id, activityId: pick.id });
+  const pending = [...planned].sort((a, b) => a.date.localeCompare(b.date)).filter((p) => !p.activityId && p.date <= today);
+  // Solo carreras: una caminata sincronizada antes que la carrera del mismo día se llevaba el plan.
+  const runsOn = (date: string) => activities.filter((a) => a.date === date && a.type === "run" && !used.has(a.id));
+  const take = (p: Planned, a: Activity) => {
+    used.add(a.id);
+    out.push({ plannedId: p.id, activityId: a.id });
+  };
+  // 1.ª pasada: la sesión que ya lleva la plantilla de ese plan (con dos planes el mismo día, cada
+  // uno se queda con la suya en vez de que el primero se lleve la más larga).
+  const left: Planned[] = [];
+  for (const p of pending) {
+    const exact = runsOn(p.date).find((a) => a.templateId === p.templateId);
+    if (exact) take(p, exact);
+    else left.push(p);
+  }
+  // 2.ª pasada: lo que quede, con la carrera más larga de ese día.
+  for (const p of left) {
+    const pick = [...runsOn(p.date)].sort((a, b) => b.distanceM - a.distanceM)[0];
+    if (pick) take(p, pick);
   }
   return out;
 }
@@ -471,7 +507,7 @@ export interface ManualRunCheck {
   paceSecPerKm: number | null;
 }
 
-export function checkManualRun(i: ManualRunInput): ManualRunCheck {
+export function checkManualRun(i: ManualRunInput & { type?: "run" | "walk" }): ManualRunCheck {
   const problems: string[] = [];
   const warnings: string[] = [];
   if (i.distanceKm === null || i.distanceKm <= 0) problems.push("Indica la distancia");
@@ -483,7 +519,7 @@ export function checkManualRun(i: ManualRunInput): ManualRunCheck {
   if (i.distanceKm && i.durationS && i.distanceKm > 0 && i.durationS > 0) {
     pace = i.durationS / i.distanceKm;
     if (pace < 150) warnings.push("Ese ritmo es más rápido que 2:30/km: revisa distancia y tiempo");
-    else if (pace > 720) warnings.push("Ese ritmo es más lento que 12:00/km: revisa distancia y tiempo");
+    else if (pace > (i.type === "walk" ? 1500 : 720)) warnings.push(i.type === "walk" ? "Ese ritmo es más lento que 25:00/km: revisa distancia y tiempo" : "Ese ritmo es más lento que 12:00/km: revisa distancia y tiempo");
   }
   return { ok: problems.length === 0, problems, warnings, paceSecPerKm: pace };
 }

@@ -90,7 +90,7 @@ export default function SessionScreen() {
         <StatGrid>
           <Stat label="Distancia" value={fmtKm(activity.distanceM)} unit="km" />
           <Stat label="Tiempo" value={fmtDuration(activity.durationS)} />
-          <Stat label="Ritmo medio" value={fmtPace(avgPace(activity))} unit="/km" />
+          <Stat label="Ritmo medio" value={activity.distanceM > 0 ? fmtPace(avgPace(activity)) : "—"} unit={activity.distanceM > 0 ? "/km" : undefined} />
           {activity.avgHr ? (
             <Stat label={`FC media${hrZoneOf(activity.avgHr, maxHr) ? ` · Zona ${hrZoneOf(activity.avgHr, maxHr)}` : ""}`} value={String(activity.avgHr)} unit="ppm" />
           ) : null}

@@ -6,8 +6,9 @@ import { Badge, Button, Card, CheckRow, CollapsibleSection, Icon, Overline, Radi
 import { toast } from "@/components/ui/Toast";
 import { useNutrition } from "@/data/store";
 import { fmtInt, parseNum } from "@/domain/format";
-import { ACTIVITY_LEVELS, calcTargets, tdee } from "@/domain/nutrition";
-import { effectiveAdjust } from "@/domain/tdee";
+import { ACTIVITY_LEVELS, calcTargets, limitsFor, tdee } from "@/domain/nutrition";
+import { targetsFor } from "@/domain/tdee";
+import { todayKey } from "@/domain/dates";
 import { MEAL_LABEL, MEAL_SLOTS, type ActivityLevel, type GoalType, type Profile, type Sex, type Targets } from "@/domain/types";
 import { space } from "@/theme/tokens";
 
@@ -21,6 +22,7 @@ export default function GoalScreen() {
   const profile = useNutrition((s) => s.profile);
   const override = useNutrition((s) => s.targetsOverride);
   const setProfile = useNutrition((s) => s.setProfile);
+  const addWeight = useNutrition((s) => s.addWeight);
   const setOverride = useNutrition((s) => s.setTargetsOverride);
   const sumExercise = useNutrition((s) => s.sumExerciseKcal);
   const setSumExercise = useNutrition((s) => s.setSumExerciseKcal);
@@ -73,7 +75,7 @@ export default function GoalScreen() {
         }
       : null;
   const suggested = useMemo(
-    () => (draft ? calcTargets(draft, tdeeState.enabled ? effectiveAdjust(draft, tdeeState.kcalAdjustment) : undefined) : null),
+    () => (draft ? targetsFor(draft, null, tdeeState) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [draft?.sex, draft?.age, draft?.heightCm, draft?.weightKg, draft?.activity, draft?.goal, tdeeState.enabled, tdeeState.kcalAdjustment],
   );
@@ -92,13 +94,17 @@ export default function GoalScreen() {
         carbs: manualNums[2] as number,
         fat: manualNums[3] as number,
         fiber: manualNums[4] as number,
+        // Límites de azúcar, grasa saturada y sal según las kcal puestas a mano, no las calculadas.
+        ...(({ fiber: _f, ...limits }) => limits)(limitsFor(manualNums[0] as number)),
         mealSplit: Object.fromEntries(MEAL_SLOTS.map((s, i) => [s, splitVals[i]])) as Targets["mealSplit"],
       }
     : suggested;
 
   const save = () => {
     if (!draft || !shown) return;
-    setProfile(draft);
+    // Un peso distinto aquí también es un pesaje de hoy: si no, perfil y registro de peso divergían.
+    if (draft.weightKg !== profile.weightKg) addWeight(todayKey(), draft.weightKg);
+    setProfile({ ...draft, weightKg: draft.weightKg });
     setOverride(manual ? shown : null);
     toast("Objetivo guardado");
     router.back();
@@ -109,7 +115,7 @@ export default function GoalScreen() {
   return (
     <Screen variant="form"
       testID="screen-objetivo"
-      footer={<Button testID="save-goal" label="Guardar objetivo" size="lg" fullWidth disabled={!canSave} onPress={save} />}
+      footer={<Button testID="save-goal" label="Guardar cambios" size="lg" fullWidth disabled={!canSave} onPress={save} />}
     >
       <ScreenHeader title="Tu objetivo" back />
       <View style={{ gap: space.xl }}>

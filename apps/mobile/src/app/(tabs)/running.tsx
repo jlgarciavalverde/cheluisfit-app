@@ -14,9 +14,9 @@ import { useAuth } from "@/data/authStore";
 import { checkHealthConnectStatus, openAppSettings, openHealthConnectInstall, openHealthConnectSettings, requestHealthConnectPermissions } from "@/data/healthConnect";
 import { useRunning } from "@/data/runningStore";
 import { connectStrava } from "@/data/stravaAuth";
-import { addDays, dayLabel, shortDayLabel, todayKey } from "@/domain/dates";
+import { addDays, dayLabel, shortDayLabel, toDateKey, todayKey } from "@/domain/dates";
 import { fmtDuration, fmtKm, fmtPace } from "@/domain/format";
-import { avgPace, dailyMeters, estimateTemplate, RUNNING_PR_LABEL, runningPRs, weekStart, weeklyTotals } from "@/domain/running";
+import { avgPace, dailyMeters, estimateTemplate, prTimeS, RUNNING_PR_LABEL, runningPRs, weekStart, weeklyTotals } from "@/domain/running";
 import { space } from "@/theme/tokens";
 
 type Tab = "sessions" | "templates" | "progress";
@@ -28,8 +28,13 @@ function syncLabel(iso: string | null): string {
   const mins = Math.round((Date.now() - d.getTime()) / 60000);
   if (mins < 1) return "Sincronizado ahora";
   if (mins < 60) return `Sincronizado hace ${mins} min`;
-  return `Sincronizado a las ${d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`;
+  const time = d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  // Con el día si no fue hoy: «a las 9:15» de hace tres días engañaba.
+  const day = toDateKey(d);
+  return day === todayKey() ? `Sincronizado a las ${time}` : `Sincronizado ${dayLabel(day, todayKey()).toLowerCase()} a las ${time}`;
 }
+
+const PAGE = 30;
 
 export default function RunningScreen() {
   const [tab, setTab] = useState<Tab>("sessions");
@@ -127,12 +132,13 @@ export default function RunningScreen() {
 
   const today = todayKey();
   const sorted = useMemo(() => [...activities].sort((a, b) => b.date.localeCompare(a.date)), [activities]);
+  const [shown, setShown] = useState(PAGE);
   const tplById = useMemo(() => new Map(templates.map((t) => [t.id, t])), [templates]);
   const week = useMemo(() => weeklyTotals(activities, today, 1)[0], [activities, today]);
   const daily = useMemo(() => dailyMeters(activities, today), [activities, today]);
   const todayIdx = (new Date().getDay() + 6) % 7;
   const nextPlanned = useMemo(
-    () => planned.filter((p) => p.date >= today).sort((a, b) => a.date.localeCompare(b.date)),
+    () => planned.filter((p) => p.date >= today && !p.activityId).sort((a, b) => a.date.localeCompare(b.date)),
     [planned, today],
   );
   const recentPlans = useMemo(
@@ -351,16 +357,22 @@ export default function RunningScreen() {
         {sorted.length === 0 ? (
           <EmptyState icon="walk-outline" title="Aún no hay sesiones" text="Sincroniza tu Garmin/Strava o registra una carrera a mano." />
         ) : (
-          <ResponsiveGrid>
-            {sorted.map((a) => (
-              <ActivityCard
-                key={a.id}
-                activity={a}
-                template={a.templateId ? tplById.get(a.templateId) : undefined}
-                onPress={() => router.push({ pathname: "/sesion/[id]", params: { id: a.id } })}
-              />
-            ))}
-          </ResponsiveGrid>
+          <>
+            {/* De 30 en 30: con años de historial de Health Connect se pintaban cientos de tarjetas de golpe. */}
+            <ResponsiveGrid>
+              {sorted.slice(0, shown).map((a) => (
+                <ActivityCard
+                  key={a.id}
+                  activity={a}
+                  template={a.templateId ? tplById.get(a.templateId) : undefined}
+                  onPress={() => router.push({ pathname: "/sesion/[id]", params: { id: a.id } })}
+                />
+              ))}
+            </ResponsiveGrid>
+            {sorted.length > shown ? (
+              <Button testID="more-sessions" label={`Ver más (${sorted.length - shown})`} variant="secondary" onPress={() => setShown((n) => n + PAGE)} />
+            ) : null}
+          </>
         )}
       </Section>
     </View>
@@ -398,7 +410,7 @@ export default function RunningScreen() {
   const progress = useMemo(() => {
     const weeks = weeklyTotals(activities, today, 8);
     const labels = weeks.map((w) => `${Number(w.weekStart.slice(8))}/${Number(w.weekStart.slice(5, 7))}`);
-    const paces = weeks.map((w) => (w.meters > 0 ? w.seconds / (w.meters / 1000) : null));
+    const paces = weeks.map((w) => (w.meters > 0 ? w.pacedSeconds / (w.meters / 1000) : null));
     const last4 = weeks.slice(-4);
     const km4 = last4.reduce((x, w) => x + w.meters, 0);
     const prs = runningPRs(activities);
@@ -447,7 +459,7 @@ export default function RunningScreen() {
         {(["5k", "10k", "half_marathon"] as const).map((key) => {
           const a = progress.prs[key];
           if (!a) return null;
-          return <PrCard key={key} testID={`pr-${key}`} label={RUNNING_PR_LABEL[key]} tone="success" value={fmtDuration(a.durationS)} when={dayLabel(a.date, today)} />;
+          return <PrCard key={key} testID={`pr-${key}`} label={RUNNING_PR_LABEL[key]} tone="success" value={fmtDuration(prTimeS(a, key))} when={dayLabel(a.date, today)} />;
         })}
       </Section>
     </View>

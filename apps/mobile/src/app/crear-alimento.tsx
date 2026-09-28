@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
-import { Callout, Button, Text, TextField } from "@/components/ui";
+import { Callout, Button, Text, TextField, IconButton } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { SEED_FOODS } from "@/data/seed";
 import { useNutrition } from "@/data/store";
@@ -23,25 +23,30 @@ const FIELDS: { key: keyof Nutrients; label: string; suffix: string; required?: 
   { key: "salt", label: "Sal", suffix: "g" },
 ];
 
-const txt = (n: number | undefined) => (n === undefined || n === 0 ? "" : String(n).replace(".", ","));
+// Al corregir un alimento, un 0 de verdad (bebidas, aceite) se enseña como «0»: antes quedaba en
+// blanco y el campo obligatorio vacío impedía guardar. Al crear, los ceros no se rellenan.
+const txt = (n: number | undefined, keepZero: boolean) => (n === undefined || (n === 0 && !keepZero) ? "" : String(n).replace(".", ","));
 
 export default function CreateFoodScreen() {
   const params = useLocalSearchParams<
     { edit?: string; barcode?: string; name?: string; meal?: string; date?: string; brand?: string; aiProposed?: string } & Partial<Record<keyof Nutrients, string>>
   >();
   const foods = useNutrition((s) => s.foods);
-  const saveFood = useNutrition((s) => s.saveFood);
+  const saveFoodVersion = useNutrition((s) => s.saveFoodVersion);
+  const removeFood = useNutrition((s) => s.removeFood);
+  const restoreFood = useNutrition((s) => s.restoreFood);
   const base = useMemo(
     () => (params.edit ? [...foods, ...SEED_FOODS].find((f) => f.id === params.edit) : undefined),
     [foods, params.edit],
   );
   const aiProposed = params.aiProposed === "1";
+  const isOwn = base?.source === "user";
 
   const [name, setName] = useState(base?.name ?? params.name ?? "");
   const [brand, setBrand] = useState(base?.brand ?? params.brand ?? "");
   const [barcode, setBarcode] = useState(base?.barcode ?? params.barcode ?? "");
   const [vals, setVals] = useState<Record<string, string>>(() =>
-    Object.fromEntries(FIELDS.map((f) => [f.key, txt(base?.per100[f.key]) || (params[f.key] ?? "")])),
+    Object.fromEntries(FIELDS.map((f) => [f.key, txt(base?.per100[f.key], !!base) || (params[f.key] ?? "")])),
   );
   const [serving, setServing] = useState(base?.servings[0] ? String(base.servings[0].grams) : "");
   const [tried, setTried] = useState(false);
@@ -70,8 +75,12 @@ export default function CreateFoodScreen() {
     setTried(true);
     if (blocked) return;
     const sg = parseNum(serving);
+    // Corregir un alimento que ya es tuyo lo edita en su sitio (antes creaba otro, y los duplicados
+    // se acumulaban); corregir uno de fuera crea tu versión, que lo sustituye en búsquedas y escáner.
+    const own = base?.source === "user";
     const food: Food = {
-      id: `user-${Date.now().toString(36)}`,
+      id: own ? base.id : `user-${Date.now().toString(36)}`,
+      ...(base && !own ? { replaces: base.id } : own && base.replaces ? { replaces: base.replaces } : {}),
       name: name.trim(),
       brand: brand.trim() || undefined,
       barcode: barcode.trim() ? (normalizeGtin13(barcode.trim()) ?? barcode.trim()) : undefined,
@@ -79,19 +88,37 @@ export default function CreateFoodScreen() {
       per100,
       servings: sg && sg > 0 ? [{ label: `1 ración (${sg} g)`, grams: sg }] : [],
     };
-    saveFood(food);
-    toast(base ? "Guardado como tu versión" : "Alimento creado");
+    saveFoodVersion(food);
+    toast(own ? "Cambios guardados" : base ? "Guardado como tu versión" : "Alimento creado");
     router.replace({ pathname: "/alimento/[id]", params: { id: food.id, meal: params.meal, date: params.date } });
   };
 
   return (
     <Screen variant="form"
       testID="screen-crear"
-      footer={<Button testID="save-food" label={base ? "Guardar corrección" : "Crear alimento"} size="lg" fullWidth onPress={save} />}
+      footer={<Button testID="save-food" label={isOwn ? "Guardar cambios" : base ? "Guardar corrección" : "Crear alimento"} size="lg" fullWidth onPress={save} />}
     >
-      <ScreenHeader title={base ? "Corregir datos" : "Nuevo alimento"} back />
+      <ScreenHeader
+        title={isOwn ? "Editar alimento" : base ? "Corregir datos" : "Nuevo alimento"}
+        back
+        right={
+          isOwn ? (
+            <IconButton
+              testID="delete-food"
+              icon="trash-outline"
+              label="Eliminar alimento"
+              color="danger"
+              onPress={() => {
+                const removed = removeFood(base.id);
+                if (removed) toast(`«${removed.name}» eliminado`, { actionLabel: "Deshacer", onAction: () => restoreFood(removed) });
+                router.back();
+              }}
+            />
+          ) : undefined
+        }
+      />
       <View style={{ gap: space.lg }}>
-        {base ? (
+        {base && !isOwn ? (
           <Callout icon="information-circle-outline">
             <Text variant="body" color="muted">
               Se guardará como <Text variant="bodyStrong">tu versión</Text> de este alimento y tendrá prioridad en tus búsquedas. El original no cambia.

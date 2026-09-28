@@ -175,5 +175,10 @@ export const CATALOG_BY_ID = new Map(CATALOG.map((e) => [e.id, e]));
 let instructions: Promise<Record<string, string[]>> | null = null;
 export function loadInstructions(id: string): Promise<string[] | undefined> {
   instructions ??= import("./catalogInstructions.json").then((m) => (m.default ?? m) as Record<string, string[]>);
-  return instructions.then((all) => all[id]).catch(() => undefined);
+  return instructions
+    .then((all) => all[id])
+    .catch(() => {
+      instructions = null; // un fallo (p. ej. sin red al pedir el trozo en la web) no se queda guardado para siempre
+      return undefined;
+    });
 }

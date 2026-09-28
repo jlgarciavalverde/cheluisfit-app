@@ -117,3 +117,41 @@ describe("effectiveAdjust", () => {
     expect(adjusted.kcal - base.kcal).toBeCloseTo(120, -1); // redondeado a la decena más cercana
   });
 });
+
+describe("checkTdeeAdjustment — correcciones de la 0.13", () => {
+  const maintenance = formulaTdee(profile);
+  // Mantenimiento real 100 kcal por debajo de la fórmula; come 500 por debajo de la fórmula.
+  const eats = maintenance - 500;
+  const realPerDay = (eats - (maintenance - 100)) / 7700;
+  const weights = Array.from({ length: 4 }, (_, i) => weight(addDays(TODAY, -12 + i * 4), 80 + realPerDay * (-12 + i * 4 + 12)));
+
+  it("no se acumula: el segundo ciclo solo corrige lo que falta hasta el mantenimiento real", () => {
+    const first = checkTdeeAdjustment({ profile, weights, entries: loggedDays(eats), today: TODAY, kcalAdjustment: 0 });
+    expect(first!.newAdjustment).toBe(-70); // −100 amortiguado a −75, redondeado a la decena (−70)
+    const second = checkTdeeAdjustment({ profile, weights, entries: loggedDays(eats), today: TODAY, kcalAdjustment: first!.newAdjustment });
+    // Antes volvía a proponer −75 más (−155 …) hasta el tope de −300; ahora se acerca a −100 y para.
+    expect(second === null || Math.abs(second.newAdjustment - -100) <= 30).toBe(true);
+    const third = checkTdeeAdjustment({ profile, weights, entries: loggedDays(eats), today: TODAY, kcalAdjustment: -100 });
+    expect(third).toBeNull();
+  });
+
+  it("los días registrados a medias no cuentan", () => {
+    // 7 días completos al mantenimiento + 7 días con solo el desayuno (400 kcal).
+    const full = loggedDays(maintenance).slice(0, 7);
+    const partial = loggedDays(400).slice(7);
+    const flat = Array.from({ length: 4 }, (_, i) => weight(addDays(TODAY, -12 + i * 4), 80));
+    // Con los días a medias, la media bajaría a ~1.500 y «no perder peso» haría bajar el objetivo.
+    expect(checkTdeeAdjustment({ profile, weights: flat, entries: [...full, ...partial], today: TODAY, kcalAdjustment: 0 })).toBeNull();
+    // Con solo 6 días completos no hay datos suficientes.
+    expect(checkTdeeAdjustment({ profile, weights: flat, entries: [...full.slice(0, 6), ...partial], today: TODAY, kcalAdjustment: 0 })).toBeNull();
+  });
+
+  it("si se comen las kcal de ejercicio, se cuentan como gasto", () => {
+    // Come mantenimiento + 400 de ejercicio y el peso no se mueve: todo cuadra, nada que proponer.
+    const flat = Array.from({ length: 4 }, (_, i) => weight(addDays(TODAY, -12 + i * 4), 80));
+    const entries = loggedDays(maintenance + 400);
+    expect(checkTdeeAdjustment({ profile, weights: flat, entries, today: TODAY, kcalAdjustment: 0, exerciseKcalPerDay: 400 })).toBeNull();
+    // Sin contar el ejercicio, parecería que come 400 de más sin engordar y subiría el objetivo.
+    expect(checkTdeeAdjustment({ profile, weights: flat, entries, today: TODAY, kcalAdjustment: 0 })!.deltaKcal).toBeGreaterThan(0);
+  });
+});

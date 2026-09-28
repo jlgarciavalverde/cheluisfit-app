@@ -20,9 +20,9 @@ import {
 import { useTheme } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
 
-function setText(s: SetLog, bodyweight: boolean): string {
+function setText(s: SetLog, bodyweight: boolean, duration = false): string {
   const kg = s.kg ?? 0;
-  const base = bodyweight && kg === 0 ? `${s.reps} rep.` : `${fmtKg(kg)} × ${s.reps}`;
+  const base = duration ? `${s.reps} s` : bodyweight && kg === 0 ? `${s.reps} rep.` : `${fmtKg(kg)} × ${s.reps}`;
   return s.type === "normal" ? base : `${base} (${SET_TYPE_LABEL[s.type].toLowerCase()})`;
 }
 
@@ -51,6 +51,9 @@ export default function ExerciseDetailScreen() {
   }
   const rec = recordsFrom(history);
   const bodyweight = ex.kind === "bodyweight";
+  const duration = ex.kind === "duration";
+  // Peso máximo, 1RM y su gráfica solo tienen sentido con carga (en uno por tiempo salía «1RM 0 kg»).
+  const weighted = ex.kind === "weight_reps";
   const chart = [...history].reverse().slice(-10);
   const e1 = chart.map((h) => bestE1rm(h.sets));
 
@@ -90,7 +93,7 @@ export default function ExerciseDetailScreen() {
           <Card style={{ gap: space.md }} testID="records">
             <Text variant="heading">Tus récords</Text>
             <View style={{ flexDirection: "row", gap: space.lg, flexWrap: "wrap" }}>
-              {!bodyweight ? (
+              {weighted ? (
                 <>
                   <View>
                     <Text variant="display" tabular>
@@ -115,7 +118,7 @@ export default function ExerciseDetailScreen() {
                 <View>
                   <Text variant="display" tabular>
                     {Math.max(...Object.values(rec.repsAtKg))}
-                    <Text variant="caption" color="muted"> reps</Text>
+                    <Text variant="caption" color="muted">{duration ? " s" : " reps"}</Text>
                   </Text>
                   <Text variant="caption" color="muted">
                     Mejor serie
@@ -130,12 +133,12 @@ export default function ExerciseDetailScreen() {
           </Callout>
         )}
 
-        {!bodyweight && chart.length >= 2 ? (
+        {weighted && chart.length >= 2 ? (
           <Card style={{ gap: space.md }} testID="e1rm-chart">
             <Text variant="heading">1RM estimado por sesión</Text>
             <LineChart
               values={e1}
-              labels={chart.map((h) => shortDayLabel(h.date).split(" ")[1] ?? "")}
+              labels={chart.map((h) => `${Number(h.date.slice(8))}/${Number(h.date.slice(5, 7))}`)}
               format={(v) => `${fmtKg(v)} kg`}
               summary={`1RM estimado por sesión: ${chart.map((h, i) => `${h.date} ${fmtKg(e1[i])}`).join(", ")}`}
             />
@@ -150,12 +153,12 @@ export default function ExerciseDetailScreen() {
             <Card padded={false}>
               {history.map((h, i) => (
                 <View
-                  key={h.date}
+                  key={`${h.date}-${i}`}
                   style={{ padding: space.lg, gap: 4, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: c.border }}
                 >
                   <Text variant="bodyStrong">{shortDayLabel(h.date)}</Text>
                   <Text variant="body" color="muted" tabular>
-                    {h.sets.filter((s) => s.done && s.type !== "warmup").map((s) => setText(s, bodyweight)).join("  ·  ")}
+                    {h.sets.filter((s) => s.done && s.type !== "warmup").map((s) => setText(s, bodyweight, duration)).join("  ·  ")}
                   </Text>
                 </View>
               ))}

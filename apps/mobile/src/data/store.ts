@@ -2,12 +2,13 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { guardedJSONStorage, guardRehydrate } from "./persistSafety";
 import { addDays, todayKey } from "@/domain/dates";
-import { calcTargets, scaleNutrients } from "@/domain/nutrition";
-import { checkTdeeAdjustment, effectiveAdjust, TDEE_CHECK_EVERY_DAYS, type TdeeProposal } from "@/domain/tdee";
+import { rescaleNutrients, scaleNutrients } from "@/domain/nutrition";
+import { useMemo } from "react";
+import { checkTdeeAdjustment, hasEnoughTdeeData, targetsFor, TDEE_CHECK_EVERY_DAYS, type TdeeProposal } from "@/domain/tdee";
 import type { Entry, Food, MealSlot, MeasurementEntry, MeasurementKind, Profile, SavedMeal, Targets, WeightEntry } from "@/domain/types";
 import { normalizeWeights } from "@/domain/weight";
 import { setMealReminder } from "@/lib/reminders";
-import { SEED_FOODS, SEED_PROFILE, seedEntries, seedWeights } from "./seed";
+import { SEED_PROFILE, seedEntries, seedWeights } from "./seed";
 
 export interface NutritionState {
   profile: Profile;
@@ -37,8 +38,14 @@ export interface NutritionState {
   updateEntry: (id: string, patch: { grams?: number; meal?: MealSlot }) => void;
   removeEntry: (id: string) => Entry | undefined;
   restoreEntry: (entry: Entry) => void;
-  copyMeal: (fromDate: string, toDate: string, meal: MealSlot) => number;
+  /** Copia una comida de un día a otro; devuelve los ids creados (para «Deshacer»). */
+  copyMeal: (fromDate: string, toDate: string, meal: MealSlot) => string[];
   saveFood: (food: Food) => void;
+  /** Guarda tu versión corregida de `food.replaces` y pasa favoritos/recientes a ella. */
+  saveFoodVersion: (food: Food) => void;
+  /** Borra un alimento propio (las entradas ya registradas guardan su copia y no cambian). */
+  removeFood: (id: string) => Food | undefined;
+  restoreFood: (food: Food) => void;
   toggleFavorite: (foodId: string) => void;
   saveMeal: (name: string, date: string, meal: MealSlot) => SavedMeal | null;
   deleteSavedMeal: (id: string) => SavedMeal | undefined;
@@ -60,7 +67,9 @@ export interface NutritionState {
   setTdeeEnabled: (enabled: boolean) => void;
   /** Revisa si toca proponer un ajuste (cadencia semanal, ver `checkTdeeAdjustment`); no hace
    *  nada mientras haya un objetivo a mano (`targetsOverride`). */
-  checkTdee: () => void;
+  /** `exerciseKcalPerDay`: media diaria de kcal de ejercicio de las 2 últimas semanas (solo cuenta
+   *  si «sumar calorías de ejercicio» está activado). */
+  checkTdee: (exerciseKcalPerDay?: number) => void;
   applyTdeeProposal: () => void;
   dismissTdeeProposal: () => void;
   resetDemo: () => void;
@@ -130,35 +139,16 @@ export const useNutrition = create<NutritionState>()(
         return id;
       },
 
+      // «Todo dato de historial guarda una copia»: al editar una entrada se reescala SU copia de
+      // nutrientes, nunca se vuelve a la ficha del alimento (que puede haberse corregido después).
+      // Si solo cambia la comida, los nutrientes no se tocan.
       updateEntry: (id, patch) =>
         set((s) => ({
           entries: s.entries.map((e) => {
             if (e.id !== id) return e;
-            const food = [...s.foods, ...SEED_FOODS].find((f) => f.id === e.foodId);
             const grams = patch.grams ?? e.grams;
-            const k = e.grams > 0 ? 100 / e.grams : 0;
-            const n = e.nutrients;
-            return {
-              ...e,
-              meal: patch.meal ?? e.meal,
-              grams,
-              // Con la ficha actual si existe; si no, se reescala la copia guardada.
-              nutrients: food
-                ? scaleNutrients(food.per100, grams)
-                : scaleNutrients(
-                    {
-                      kcal: n.kcal * k,
-                      protein: n.protein * k,
-                      carbs: n.carbs * k,
-                      fat: n.fat * k,
-                      fiber: n.fiber * k,
-                      sugars: n.sugars * k,
-                      satFat: n.satFat * k,
-                      salt: n.salt * k,
-                    },
-                    grams,
-                  ),
-            };
+            if (grams === e.grams || e.grams <= 0) return { ...e, meal: patch.meal ?? e.meal, grams };
+            return { ...e, meal: patch.meal ?? e.meal, grams, nutrients: rescaleNutrients(e.nutrients, grams / e.grams) };
           }),
         })),
 
@@ -176,7 +166,7 @@ export const useNutrition = create<NutritionState>()(
         const src = get().entries.filter((e) => e.date === fromDate && e.meal === meal);
         const copies = src.map((e) => ({ ...e, id: uid(), date: toDate }));
         if (copies.length) set((s) => ({ entries: [...s.entries, ...copies] }));
-        return copies.length;
+        return copies.map((c) => c.id);
       },
 
       saveFood: (food) =>
@@ -185,6 +175,22 @@ export const useNutrition = create<NutritionState>()(
             ? s.foods.map((f) => (f.id === food.id ? food : f))
             : [...s.foods, food],
         })),
+
+      saveFoodVersion: (food) =>
+        set((s) => {
+          const swap = (ids: string[]) => (food.replaces ? [...new Set(ids.map((id) => (id === food.replaces ? food.id : id)))] : ids);
+          return {
+            foods: s.foods.some((f) => f.id === food.id) ? s.foods.map((f) => (f.id === food.id ? food : f)) : [...s.foods, food],
+            favorites: swap(s.favorites),
+            recents: swap(s.recents),
+          };
+        }),
+      removeFood: (id) => {
+        const found = get().foods.find((f) => f.id === id);
+        if (found) set((s) => ({ foods: s.foods.filter((f) => f.id !== id), favorites: s.favorites.filter((x) => x !== id), recents: s.recents.filter((x) => x !== id) }));
+        return found;
+      },
+      restoreFood: (food) => set((s) => ({ foods: s.foods.some((f) => f.id === food.id) ? s.foods : [...s.foods, food] })),
 
       toggleFavorite: (foodId) =>
         set((s) => ({
@@ -248,7 +254,16 @@ export const useNutrition = create<NutritionState>()(
 
       removeWeight: (date) => {
         const found = get().weights.find((w) => w.date === date);
-        if (found) set((s) => ({ weights: s.weights.filter((w) => w.date !== date) }));
+        if (found) {
+          set((s) => {
+            const weights = s.weights.filter((w) => w.date !== date);
+            const wasLatest = normalizeWeights(s.weights).at(-1)?.date === date;
+            const latest = normalizeWeights(weights).at(-1);
+            // Borrar el último pesaje (p. ej. una errata, 87 en vez de 78) no debe dejar ese valor
+            // en el perfil y en los objetivos: pasa a valer el pesaje anterior.
+            return { weights, profile: wasLatest && latest ? { ...s.profile, weightKg: latest.kg } : s.profile };
+          });
+        }
         return found;
       },
 
@@ -262,7 +277,13 @@ export const useNutrition = create<NutritionState>()(
         return found;
       },
 
-      setProfile: (profile) => set({ profile }),
+      // Cambiar objetivo o actividad cambia la base del cálculo: una propuesta pendiente hecha con
+      // la base anterior ya no vale.
+      setProfile: (profile) =>
+        set((s) => ({
+          profile,
+          tdee: s.profile.goal !== profile.goal || s.profile.activity !== profile.activity ? { ...s.tdee, pending: null } : s.tdee,
+        })),
       setTargetsOverride: (targetsOverride) => set({ targetsOverride }),
       setSumExerciseKcal: (sumExerciseKcal) => set({ sumExerciseKcal }),
       setRemindMeals: (remindMeals) => {
@@ -272,15 +293,19 @@ export const useNutrition = create<NutritionState>()(
       setFridgeContents: (items) => set({ fridge: { items, lastScannedAt: todayKey() } }),
       clearFridge: () => set({ fridge: { items: [], lastScannedAt: null } }),
       setTdeeEnabled: (enabled) => set((s) => ({ tdee: { ...s.tdee, enabled } })),
-      checkTdee: () => {
+      checkTdee: (exerciseKcalPerDay = 0) => {
         const s = get();
+        if (!s.tdee.enabled) return; // desactivado en Objetivo: ni propone ni cuenta revisiones
         if (s.targetsOverride !== null) return; // objetivo a mano: el motor queda en pausa, no compite
         const today = todayKey();
         if (s.tdee.lastCheckedAt) {
           const daysSince = Math.round((Date.parse(today) - Date.parse(s.tdee.lastCheckedAt)) / 86_400_000);
           if (daysSince < TDEE_CHECK_EVERY_DAYS) return; // no toca revisar todavía: no se toca `lastCheckedAt`
         }
-        const proposal = checkTdeeAdjustment({ profile: s.profile, weights: s.weights, entries: s.entries, today, kcalAdjustment: s.tdee.kcalAdjustment });
+        const input = { profile: s.profile, weights: s.weights, entries: s.entries, today, kcalAdjustment: s.tdee.kcalAdjustment, exerciseKcalPerDay: s.sumExerciseKcal ? exerciseKcalPerDay : 0 };
+        // Sin datos suficientes no cuenta como revisión: se vuelve a mirar en cuanto los haya.
+        if (!hasEnoughTdeeData(input)) return;
+        const proposal = checkTdeeAdjustment(input);
         set((cur) => ({ tdee: { ...cur.tdee, lastCheckedAt: today, pending: proposal } }));
       },
       applyTdeeProposal: () =>
@@ -310,21 +335,16 @@ export const useNutrition = create<NutritionState>()(
   ),
 );
 
-/** Objetivos vigentes: los editados a mano o los calculados del perfil. */
+/** Objetivos vigentes (ver `targetsFor` en `domain/tdee.ts`, la única cuenta). */
 export function selectTargets(s: Pick<NutritionState, "profile" | "targetsOverride" | "tdee">): Targets {
-  return s.targetsOverride ?? calcTargets(s.profile, s.tdee.enabled ? effectiveAdjust(s.profile, s.tdee.kcalAdjustment) : undefined);
+  return targetsFor(s.profile, s.targetsOverride, s.tdee);
 }
 
 export function useTargets(): Targets {
   const profile = useNutrition((s) => s.profile);
   const override = useNutrition((s) => s.targetsOverride);
   const tdeeState = useNutrition((s) => s.tdee);
-  return override ?? calcTargets(profile, tdeeState.enabled ? effectiveAdjust(profile, tdeeState.kcalAdjustment) : undefined);
-}
-
-export function useDayEntries(date: string): Entry[] {
-  const entries = useNutrition((s) => s.entries);
-  return entries.filter((e) => e.date === date);
+  return useMemo(() => targetsFor(profile, override, tdeeState), [profile, override, tdeeState]);
 }
 
 export { addDays, todayKey };

@@ -13,6 +13,7 @@ import { useNutrition, selectTargets } from "@/data/store";
 import { useStrength } from "@/data/strengthStore";
 import { AI_MAX_CHARS, chatHistory, foodFromMealProposal, nutritionContext, runningContext, sectionForPath, strengthContext, type AiSection } from "@/domain/aiContext";
 import { todayKey } from "@/domain/dates";
+import { carbsFor, limitsFor } from "@/domain/nutrition";
 import { MEAL_LABEL } from "@/domain/types";
 import { useBreakpoint, useTheme } from "@/theme/ThemeProvider";
 import { elevation, radius, space } from "@/theme/tokens";
@@ -99,8 +100,12 @@ function applyProposal(p: AiProposal, section: AiSection): { ok: boolean; messag
   // adjust_goal
   if (section !== "nutrition") return { ok: false, message: "Esta propuesta no se puede aplicar aquí" };
   const targets = selectTargets(useNutrition.getState());
-  useNutrition.getState().setTargetsOverride({ ...targets, [p.field]: p.value });
-  return { ok: true, message: "Objetivo actualizado" };
+  // Cambiar solo las kcal dejaba los macros sumando las kcal de antes: se recalculan los hidratos
+  // (proteína y grasa se mantienen) y los límites que dependen de las kcal.
+  const next = { ...targets, [p.field]: p.value };
+  if (p.field === "kcal") Object.assign(next, { carbs: carbsFor(p.value, targets.protein, targets.fat) }, (({ fiber: _f, ...l }) => l)(limitsFor(p.value)));
+  useNutrition.getState().setTargetsOverride(next);
+  return { ok: true, message: "Objetivo actualizado (el ajuste automático queda en pausa mientras tengas un objetivo a mano)" };
 }
 
 function MessageBubble({ message, section, onResolve }: { message: ChatMessage; section: AiSection; onResolve: (proposalIndex: number, resolved: "applied" | "discarded") => void }) {

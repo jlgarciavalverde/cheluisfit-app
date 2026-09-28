@@ -42,10 +42,12 @@ export default function HoyScreen() {
   const activeWorkout = useActiveWorkout((s) => s.workout);
   const startWorkout = useActiveWorkout((s) => s.start);
   const suggestedRoutine = useMemo(() => nextSuggestedRoutine(routines, gymWorkouts), [routines, gymWorkouts]);
+  const doneToday = useMemo(() => gymWorkouts.filter((w) => w.date === today).at(-1), [gymWorkouts, today]);
 
   const totals = useMemo(() => sumNutrients(entries.filter((e) => e.date === today).map((e) => e.nutrients)), [entries, today]);
   const upcoming = useMemo(
-    () => planned.filter((p) => p.date >= today && p.date <= addDays(today, 2)).sort((a, b) => a.date.localeCompare(b.date))[0],
+    // Un plan de hoy que ya se hizo (tiene sesión enlazada) no es «el próximo».
+    () => planned.filter((p) => !p.activityId && p.date >= today && p.date <= addDays(today, 2)).sort((a, b) => a.date.localeCompare(b.date))[0],
     [planned, today],
   );
   const upcomingTpl = upcoming ? templates.find((t) => t.id === upcoming.templateId) : undefined;
@@ -162,6 +164,15 @@ export default function HoyScreen() {
               icon="play"
               onPress={() => router.push({ pathname: "/entreno/[id]", params: { id: activeWorkout.id } })}
             />
+          </>
+        ) : doneToday ? (
+          // Ya se entrenó hoy: nada de «Hoy toca» otra vez.
+          <>
+            <Text variant="heading" testID="hoy-done">Hecho hoy: {doneToday.name}</Text>
+            <Text variant="caption" color="muted">
+              {suggestedRoutine ? `La próxima: ${suggestedRoutine.name}` : "Buen trabajo."}
+            </Text>
+            <Button label="Ver entreno" variant="secondary" size="sm" onPress={() => router.push({ pathname: "/entreno/detalle/[id]", params: { id: doneToday.id } })} />
           </>
         ) : suggestedRoutine ? (
           <>

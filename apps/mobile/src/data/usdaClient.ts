@@ -20,6 +20,10 @@ export class UsdaError extends Error {}
 
 const NUTRIENT_ID = {
   kcal: 1008,
+  // Los alimentos «Foundation» a menudo no traen 1008 y solo la energía Atwater (general 2047,
+  // específica 2048): sin este respaldo salían con 0 kcal.
+  kcalAtwaterGeneral: 2047,
+  kcalAtwaterSpecific: 2048,
   protein: 1003,
   carbs: 1005,
   fat: 1004,
@@ -60,7 +64,7 @@ function titleCase(s: string): string {
 function toFood(f: UsdaFood): Food {
   const n = f.foodNutrients ?? [];
   const per100: Nutrients = {
-    kcal: nutrientValue(n, NUTRIENT_ID.kcal),
+    kcal: nutrientValue(n, NUTRIENT_ID.kcal, NUTRIENT_ID.kcalAtwaterGeneral) || nutrientValue(n, NUTRIENT_ID.kcalAtwaterSpecific),
     protein: nutrientValue(n, NUTRIENT_ID.protein),
     carbs: nutrientValue(n, NUTRIENT_ID.carbs),
     fat: nutrientValue(n, NUTRIENT_ID.fat),

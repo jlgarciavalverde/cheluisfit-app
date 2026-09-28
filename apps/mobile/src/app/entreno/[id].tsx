@@ -74,7 +74,6 @@ function Runner() {
   const { c } = useTheme();
   const { isWide } = useBreakpoint();
   const kbOpen = useKeyboardOpen();
-  const now = useNow(1000);
 
   const workout = useActiveWorkout((s) => s.workout)!;
   const current = useActiveWorkout((s) => s.current);
@@ -114,7 +113,8 @@ function Runner() {
 
   const idx = Math.min(current, Math.max(0, workout.exercises.length - 1));
   const ex = workout.exercises[idx];
-  const libEx = ex ? library.find((e) => e.id === ex.exerciseId) : undefined;
+  const libById = useMemo(() => new Map(library.map((e) => [e.id, e])), [library]);
+  const libEx = ex ? libById.get(ex.exerciseId) : undefined;
   const media = libEx ?? (ex ? { name: ex.name, frames: undefined, video: undefined } : undefined);
 
   const history = useMemo(() => (ex ? historyFor(workouts, ex.exerciseId) : []), [workouts, ex?.exerciseId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -138,6 +138,14 @@ function Runner() {
     () => (ex && suggestion ? ghostsFor(ex.sets, suggestion, previous, { barKg, usesBar: ex.equipment === "barbell" }) : []),
     [ex?.sets, suggestion, previous, barKg, ex?.equipment], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  // Peso de trabajo: el que la persona ya ha escrito en la primera serie de trabajo; si no, el
+  // sugerido. Antes se usaba siempre el sugerido (y podía coger el de una fila de calentamiento).
+  const workKg = (() => {
+    if (!ex) return 0;
+    const i = ex.sets.findIndex((x) => x.type !== "warmup");
+    if (i < 0) return 0;
+    return ex.sets[i]!.kg ?? ghosts[i]?.kg ?? 0;
+  })();
 
   // Al marcar una serie la tabla se desplaza para dejar visible la siguiente.
   const doneHere = ex ? ex.sets.filter((s) => s.done).length : 0;
@@ -161,15 +169,19 @@ function Runner() {
     }, [idx, workout.exercises.length]),
   );
 
-  const elapsed = (now - new Date(workout.startedAt).getTime()) / 1000;
+  // El reloj que avanza cada segundo vive en `<Elapsed>`: antes era un estado de esta pantalla y la
+  // repintaba entera cada segundo (tabla de series, fotos, círculos…).
+  const elapsedAtRender = (Date.now() - new Date(workout.startedAt).getTime()) / 1000;
   const doneSets = workout.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
   const pendingSets = workout.exercises.reduce((n, e) => n + e.sets.filter((s) => !s.done).length, 0);
   const allDone = !!ex && ex.sets.length > 0 && ex.sets.every((s) => s.done);
   const nextIdx = workout.exercises.findIndex((e, i) => i > idx && e.sets.some((s) => !s.done));
 
+  // Solo cambia si cambia el ejercicio o la lista de ejercicios (no al escribir en una serie).
+  const exerciseIds = workout.exercises.map((e) => e.exerciseId).join("|");
   const substitutes = useMemo(
-    () => (libEx ? suggestSubstitutes(libEx, library, workout.exercises.map((e) => e.exerciseId)) : []),
-    [libEx, library, workout.exercises],
+    () => (libEx ? suggestSubstitutes(libEx, library, exerciseIds.split("|")) : []),
+    [libEx, library, exerciseIds],
   );
 
   const finishAndSave = () => {
@@ -212,9 +224,7 @@ function Runner() {
             <Text variant="heading" numberOfLines={1} testID="workout-name">
               {workout.name}
             </Text>
-            <Text variant="caption" color="muted" tabular testID="workout-elapsed">
-              {fmtDuration(elapsed)} · {doneSets} series
-            </Text>
+            <Elapsed startedAt={workout.startedAt} doneSets={doneSets} />
           </Pressable>
           <Button testID="finish" label="Terminar" size="sm" onPress={() => setFinishSheet(true)} />
         </View>
@@ -306,15 +316,14 @@ function Runner() {
         onClose={() => setMenu(false)}
         exerciseName={ex?.name ?? "Ejercicio"}
         hasNote={!!ex?.note}
-        canWarmup={!!ex && ex.kind !== "duration" && !ex.sets.some((s) => s.type === "warmup") && (ghosts.find((g) => g?.kg)?.kg ?? 0) > 0}
+        canWarmup={!!ex && ex.kind !== "duration" && !ex.sets.some((s) => s.type === "warmup") && workKg > 0}
         canPlates={ex?.equipment === "barbell"}
         hasSuperset={!!ex?.supersetId}
         canLink={!ex?.supersetId && workout.exercises.length > 1}
         onReplace={() => { setMenu(false); setPicker("replace"); }}
         onWarmup={() => {
           if (!ex) return;
-          const ref = ghosts.find((g) => g?.kg)?.kg ?? 0;
-          addWarmups(idx, warmupSets(ref, ex.equipment === "barbell" ? barKg : 0));
+          addWarmups(idx, warmupSets(workKg, ex.equipment === "barbell" ? barKg : 0, ex.plan.increment > 0 ? ex.plan.increment : 2.5));
           setMenu(false);
         }}
         onPlates={() => { setMenu(false); setPlatesOpen(true); }}
@@ -334,7 +343,7 @@ function Runner() {
         }}
       />
 
-      <PlatesSheet key={`${idx}-${platesOpen}`} visible={platesOpen} onClose={() => setPlatesOpen(false)} initialKg={ghosts.find((g) => g?.kg)?.kg ?? null} barKg={barKg} plates={plates} />
+      <PlatesSheet key={`${idx}-${platesOpen}`} visible={platesOpen} onClose={() => setPlatesOpen(false)} initialKg={workKg || null} barKg={barKg} plates={plates} />
 
       <LinkSupersetSheet
         visible={linkSheet}
@@ -352,7 +361,7 @@ function Runner() {
         visible={finishSheet}
         onClose={() => setFinishSheet(false)}
         workoutName={workout.name}
-        elapsedLabel={fmtDuration(elapsed)}
+        elapsedLabel={fmtDuration(elapsedAtRender)}
         doneSets={doneSets}
         pendingSets={pendingSets}
         onSave={finishAndSave}
@@ -424,3 +433,13 @@ export default function WorkoutScreen() {
   return <Runner />;
 }
 
+
+/** Tiempo transcurrido del entreno, que se repinta solo a sí mismo cada segundo. */
+function Elapsed({ startedAt, doneSets }: { startedAt: string; doneSets: number }) {
+  const now = useNow(1000);
+  return (
+    <Text variant="caption" color="muted" tabular testID="workout-elapsed" numberOfLines={1}>
+      {fmtDuration((now - new Date(startedAt).getTime()) / 1000)} · {doneSets} {doneSets === 1 ? "serie" : "series"}
+    </Text>
+  );
+}

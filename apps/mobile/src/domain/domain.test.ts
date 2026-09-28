@@ -193,3 +193,22 @@ describe("fechas y formatos", () => {
     expect(fmtRelativeTime(Date.parse("2025-01-01T00:00:00.000Z"), now)).toBe("1 ene");
   });
 });
+
+import { parseNum as parseNumEs } from "./format";
+
+describe("parseNum a la española", () => {
+  it("coma o punto decimal, punto de miles, y nada ambiguo", () => {
+    expect(parseNumEs("62,5")).toBe(62.5);
+    expect(parseNumEs("62.5")).toBe(62.5);
+    expect(parseNumEs("1.000")).toBe(1000);
+    expect(parseNumEs("1.250")).toBe(1250);
+    expect(parseNumEs("1.234,5")).toBe(1234.5);
+    expect(parseNumEs("12.345.678")).toBe(12345678);
+    expect(parseNumEs("0,25")).toBe(0.25);
+    expect(parseNumEs(" 80 ")).toBe(80);
+    expect(parseNumEs("")).toBeNull();
+    expect(parseNumEs("abc")).toBeNull();
+    expect(parseNumEs("1,2,3")).toBeNull();
+    expect(parseNumEs("5:14")).toBeNull();
+  });
+});

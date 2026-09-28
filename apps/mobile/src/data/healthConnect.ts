@@ -9,6 +9,7 @@
 import { Linking, Platform } from "react-native";
 import {
   aggregateRecord,
+  ExerciseSegmentType,
   ExerciseType,
   getGrantedPermissions,
   getSdkStatus,
@@ -20,7 +21,7 @@ import {
   SdkAvailabilityStatus,
 } from "react-native-health-connect";
 import { toDateKey } from "@/domain/dates";
-import type { Activity } from "@/domain/running";
+import type { Activity, Lap } from "@/domain/running";
 
 /** Enlace a la ficha de Health Connect en Play Store, para cuando no está instalado. */
 export const HEALTH_CONNECT_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata";
@@ -66,6 +67,7 @@ const ESSENTIAL_PERMISSION = { accessType: "read", recordType: "ExerciseSession"
 const OPTIONAL_PERMISSIONS = [
   { accessType: "read", recordType: "Distance" },
   { accessType: "read", recordType: "TotalCaloriesBurned" },
+  { accessType: "read", recordType: "ActiveCaloriesBurned" },
   { accessType: "read", recordType: "HeartRate" },
   { accessType: "read", recordType: "ElevationGained" },
 ] as const;
@@ -128,18 +130,26 @@ export async function requestHealthConnectPermissions(): Promise<boolean> {
 
 const between = (startTime: string, endTime: string) => ({ operator: "between" as const, startTime, endTime });
 
-/** Agregados de una sesión (distancia/calorías/FC/desnivel) — `ExerciseSessionRecord` no los trae embebidos. */
-async function sessionAggregates(startTime: string, endTime: string) {
+/**
+ * Agregados de una sesión (distancia/calorías/FC/desnivel) — `ExerciseSessionRecord` no los trae
+ * embebidos. **Solo del mismo origen que la sesión** (`dataOriginFilter`): si no, en esa franja se
+ * sumaban también los pasos/distancia que el propio móvil u otra app registraban a la vez.
+ */
+async function sessionAggregates(startTime: string, endTime: string, origin?: string) {
   const range = between(startTime, endTime);
-  const [distance, calories, hr, elevation] = await Promise.allSettled([
-    callNative("aggregateRecord(Distance)", () => aggregateRecord({ recordType: "Distance", timeRangeFilter: range })),
-    callNative("aggregateRecord(TotalCaloriesBurned)", () => aggregateRecord({ recordType: "TotalCaloriesBurned", timeRangeFilter: range })),
-    callNative("aggregateRecord(HeartRate)", () => aggregateRecord({ recordType: "HeartRate", timeRangeFilter: range })),
-    callNative("aggregateRecord(ElevationGained)", () => aggregateRecord({ recordType: "ElevationGained", timeRangeFilter: range })),
+  const dataOriginFilter = origin ? [origin] : undefined;
+  const [distance, total, active, hr, elevation] = await Promise.allSettled([
+    callNative("aggregateRecord(Distance)", () => aggregateRecord({ recordType: "Distance", timeRangeFilter: range, dataOriginFilter })),
+    callNative("aggregateRecord(TotalCaloriesBurned)", () => aggregateRecord({ recordType: "TotalCaloriesBurned", timeRangeFilter: range, dataOriginFilter })),
+    callNative("aggregateRecord(ActiveCaloriesBurned)", () => aggregateRecord({ recordType: "ActiveCaloriesBurned", timeRangeFilter: range, dataOriginFilter })),
+    callNative("aggregateRecord(HeartRate)", () => aggregateRecord({ recordType: "HeartRate", timeRangeFilter: range, dataOriginFilter })),
+    callNative("aggregateRecord(ElevationGained)", () => aggregateRecord({ recordType: "ElevationGained", timeRangeFilter: range, dataOriginFilter })),
   ]);
+  const activeKcal = active.status === "fulfilled" ? Math.round(active.value.ACTIVE_CALORIES_TOTAL.inKilocalories) : 0;
   return {
     distanceM: distance.status === "fulfilled" ? Math.round(distance.value.DISTANCE.inMeters) : 0,
-    kcal: calories.status === "fulfilled" ? Math.round(calories.value.ENERGY_TOTAL.inKilocalories) : undefined,
+    totalKcal: total.status === "fulfilled" ? Math.round(total.value.ENERGY_TOTAL.inKilocalories) : undefined,
+    activeKcal: activeKcal > 0 ? activeKcal : undefined,
     avgHr: hr.status === "fulfilled" && hr.value.MEASUREMENTS_COUNT > 0 ? Math.round(hr.value.BPM_AVG) : undefined,
     maxHr: hr.status === "fulfilled" && hr.value.MEASUREMENTS_COUNT > 0 ? Math.round(hr.value.BPM_MAX) : undefined,
     ascentM: elevation.status === "fulfilled" ? Math.round(elevation.value.ELEVATION_GAINED_TOTAL.inMeters) : undefined,
@@ -148,43 +158,86 @@ async function sessionAggregates(startTime: string, endTime: string) {
 
 export type ImportedActivity = Omit<Activity, "id">;
 
+const PAUSE_TYPES = new Set<number>([ExerciseSegmentType?.PAUSE, ExerciseSegmentType?.REST].filter((x): x is number => typeof x === "number"));
+const ms = (iso: string) => new Date(iso).getTime();
+
+/** Segundos en movimiento: la duración de la sesión menos sus pausas (como el ritmo del reloj). */
+export function movingSeconds(r: { startTime: string; endTime: string; segments?: { startTime: string; endTime: string; segmentType: number }[] }): number {
+  const total = (ms(r.endTime) - ms(r.startTime)) / 1000;
+  const paused = (r.segments ?? []).filter((sg) => PAUSE_TYPES.has(sg.segmentType)).reduce((x, sg) => x + Math.max(0, (ms(sg.endTime) - ms(sg.startTime)) / 1000), 0);
+  return Math.round(Math.max(0, total - paused));
+}
+
+/** Vueltas del reloj (para «plan vs. real» y el ritmo por vuelta); el tipo lo pone la plantilla al vincular. */
+type LapLength = { inMeters?: number; value?: number; unit?: string };
+const UNIT_M: Record<string, number> = { meters: 1, kilometers: 1000, miles: 1609.344, feet: 0.3048, inches: 0.0254 };
+/** La librería declara `{value, unit}` pero lo leído del sistema viene como `{inMeters, …}`: vale cualquiera. */
+const lapMeters = (l?: LapLength) => (l ? (l.inMeters ?? (l.value ?? 0) * (UNIT_M[l.unit ?? "meters"] ?? 1)) : 0);
+
+export function lapsFrom(laps: { startTime: string; endTime: string; length?: LapLength | object }[] | undefined): Lap[] | undefined {
+  const out = (laps ?? [])
+    .map((l, i) => ({ index: i + 1, distanceM: Math.round(lapMeters(l.length as LapLength | undefined)), durationS: Math.round((ms(l.endTime) - ms(l.startTime)) / 1000) }))
+    .filter((l) => l.durationS > 0);
+  return out.length > 1 ? out : undefined;
+}
+
 /**
  * Lee las sesiones de ejercicio nuevas desde `sinceISO` (o desde siempre si es `null`, primera
  * sincronización) hasta ahora, y las mapea a `Activity`. Lanza si Health Connect no está
  * disponible o no se ha concedido permiso — el llamador decide cómo contarlo al usuario.
+ * - Pagina (`pageToken`): con años de historial, la primera página no lo traía todo.
+ * - Las sesiones ya importadas (`knownIds`, p. ej. las del solape de 7 días) no se vuelven a
+ *   agregar: son 5 llamadas nativas por sesión.
+ * - Kcal: las **activas** (las totales incluyen el metabolismo basal, que ya está en el objetivo
+ *   del día y se contaba dos veces). Si el reloj no da activas, total − `bmrKcalPerDay` del rato.
  */
-export async function importNewActivities(sinceISO: string | null): Promise<ImportedActivity[]> {
+export async function importNewActivities(sinceISO: string | null, opts: { knownIds?: ReadonlySet<string>; bmrKcalPerDay?: number } = {}): Promise<ImportedActivity[]> {
   if (!(await ensureInitialized())) throw new HealthConnectError("Health Connect no está disponible en este dispositivo");
   const startTime = sinceISO ?? new Date(0).toISOString();
   const endTime = new Date().toISOString();
-  const { records } = await callNative("readRecords(ExerciseSession)", () =>
-    readRecords("ExerciseSession", { timeRangeFilter: between(startTime, endTime), ascendingOrder: true }),
-  );
+  const records: Awaited<ReturnType<typeof readRecords<"ExerciseSession">>>["records"] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < 50; page++) {
+    const res = await callNative("readRecords(ExerciseSession)", () =>
+      readRecords("ExerciseSession", { timeRangeFilter: between(startTime, endTime), ascendingOrder: true, pageToken }),
+    );
+    records.push(...res.records);
+    pageToken = res.pageToken || undefined;
+    if (!pageToken) break;
+  }
 
+  const fresh = records.filter((r) => TYPE_MAP[r.exerciseType] && !(r.metadata?.id && opts.knownIds?.has(r.metadata.id)));
   const out: ImportedActivity[] = [];
-  for (const r of records) {
-    const type = TYPE_MAP[r.exerciseType];
-    if (!type) continue; // fútbol y otros tipos no soportados todavía, se ignoran a propósito
-    const durationS = Math.round((new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 1000);
-    if (durationS <= 0) continue;
-    const agg = await sessionAggregates(r.startTime, r.endTime);
-    out.push({
-      date: toDateKey(new Date(r.startTime)),
-      type,
-      source: "garmin",
-      title: r.title?.trim() || (type === "run" ? "Carrera" : "Caminata"),
-      distanceM: agg.distanceM,
-      durationS,
-      avgHr: agg.avgHr,
-      maxHr: agg.maxHr,
-      ascentM: agg.ascentM,
-      kcal: agg.kcal,
-      // Health Connect siempre rellena `metadata.id` en los registros que devuelve `readRecords`
-      // (verificado en el SDK de androidx.health.connect) — `mergeImportedActivities()` confía en
-      // que sea así para deduplicar; sin `externalId`, esa función trata la actividad como nueva
-      // siempre, así que un cambio futuro de la librería que dejara esto vacío duplicaría en
-      // cada sincronización, no solo la primera vez.
-      externalId: r.metadata?.id,
+  // De 8 en 8 en paralelo: rápido sin saturar el servicio de Health Connect.
+  for (let i = 0; i < fresh.length; i += 8) {
+    const batch = fresh.slice(i, i + 8);
+    const aggs = await Promise.all(batch.map((r) => sessionAggregates(r.startTime, r.endTime, r.metadata?.dataOrigin)));
+    batch.forEach((r, j) => {
+      const type = TYPE_MAP[r.exerciseType]!;
+      const durationS = movingSeconds(r);
+      if (durationS <= 0) return;
+      const agg = aggs[j]!;
+      const wallMinutes = (ms(r.endTime) - ms(r.startTime)) / 60000;
+      const kcal =
+        agg.activeKcal ??
+        (agg.totalKcal !== undefined && opts.bmrKcalPerDay ? Math.max(0, Math.round(agg.totalKcal - (opts.bmrKcalPerDay / 1440) * wallMinutes)) : agg.totalKcal);
+      out.push({
+        date: toDateKey(new Date(r.startTime)),
+        type,
+        source: "garmin",
+        title: r.title?.trim() || (type === "run" ? "Carrera" : "Caminata"),
+        distanceM: agg.distanceM,
+        durationS,
+        avgHr: agg.avgHr,
+        maxHr: agg.maxHr,
+        ascentM: agg.ascentM,
+        kcal,
+        laps: lapsFrom(r.laps),
+        // Health Connect siempre rellena `metadata.id` en los registros que devuelve `readRecords`
+        // (verificado en el SDK de androidx.health.connect) — `mergeImportedActivities()` confía en
+        // que sea así para deduplicar.
+        externalId: r.metadata?.id,
+      });
     });
   }
   return out;

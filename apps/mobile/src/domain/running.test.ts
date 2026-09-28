@@ -370,3 +370,51 @@ describe("runningPRs", () => {
     expect(runningPRs([faster, slower])["5k"]?.id).toBe("fast"); // el orden de entrada no importa
   });
 });
+
+import { applyTemplate as applyTpl, matchPlanned as matchP, prTimeS, runningPRs as prsOf } from "./running";
+
+describe("running — correcciones de la 0.13", () => {
+  const run = (id: string, distanceM: number, durationS: number, extra: object = {}) =>
+    ({ id, date: "2026-09-20", type: "run", source: "garmin", title: id, distanceM, durationS, ...extra }) as Activity;
+
+  it("un 5K tiene que ser un 5K: la de 4,6 km no bate a un 5K más rápido; se compara el tiempo llevado a 5 km", () => {
+    const short = run("corta", 4600, 22 * 60); // 4,6 km en 22:00 (≈ 23:55 a 5 km)
+    const real = run("real", 5000, 23 * 60 + 30); // 23:30
+    const long = run("larga", 5300, 25 * 60); // 25:00 en 5,3 km ≈ 23:35
+    const prs = prsOf([short, real, long]);
+    expect(prs["5k"]?.id).toBe("real");
+    expect(prTimeS(long, "5k")).toBe(Math.round((25 * 60 * 5000) / 5300));
+  });
+
+  it("un plan solo lo cumple una carrera (no una caminata), y primero la que lleva su plantilla", () => {
+    const walk = { ...run("paseo", 12000, 7200), type: "walk" } as Activity;
+    const a = run("a", 8000, 2400, { templateId: "t-b" });
+    const b = run("b", 5000, 1500);
+    const planned = [
+      { id: "p1", date: "2026-09-20", templateId: "t-a" },
+      { id: "p2", date: "2026-09-20", templateId: "t-b" },
+    ];
+    const m = matchP(planned, [walk, a, b], "2026-09-21");
+    expect(m).toEqual(
+      expect.arrayContaining([
+        { plannedId: "p2", activityId: "a" },
+        { plannedId: "p1", activityId: "b" },
+      ]),
+    );
+    expect(m.some((x) => x.activityId === "paseo")).toBe(false);
+  });
+
+  it("al vincular, las vueltas reciben el tipo de su paso si coinciden en número", () => {
+    const tpl = { id: "t", name: "2×1 km", kind: "intervals", items: [
+      { id: "s1", type: "step", kind: "warmup", duration: { type: "time", seconds: 600 }, target: { type: "none" } },
+      { id: "s2", type: "step", kind: "work", duration: { type: "distance", meters: 1000 }, target: { type: "none" } },
+      { id: "s3", type: "step", kind: "cooldown", duration: { type: "time", seconds: 300 }, target: { type: "none" } },
+    ] } as unknown as Template;
+    const a = run("x", 4000, 1500, { laps: [
+      { index: 1, distanceM: 1800, durationS: 600 },
+      { index: 2, distanceM: 1000, durationS: 240 },
+      { index: 3, distanceM: 1200, durationS: 300 },
+    ] });
+    expect(applyTpl(a, tpl).laps!.map((l) => l.kind)).toEqual(["warmup", "work", "cooldown"]);
+  });
+});

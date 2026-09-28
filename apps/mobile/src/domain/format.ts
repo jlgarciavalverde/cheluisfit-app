@@ -40,9 +40,18 @@ export function fmtKm(meters: number): string {
 }
 
 /** Número desde texto con coma o punto decimal; `null` si no es válido o está vacío. */
+/**
+ * Número escrito a la española: coma decimal y punto de miles. «62,5» y «62.5» → 62,5;
+ * «1.000» o «1.250» (punto seguido de grupos de 3 cifras) → miles; «1.234,5» → 1234,5.
+ * Antes «1.000» valía 1 (y así volvían los gramos que la propia app escribía con separador de
+ * miles) y «1.234,5» no valía nada.
+ */
 export function parseNum(s: string): number | null {
-  const t = s.trim().replace(",", ".");
+  let t = s.trim().replace(/\s/g, "");
   if (t === "") return null;
+  if (t.includes(",")) t = t.replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, "");
+  if (!/^-?\d*\.?\d+$/.test(t) && !/^-?\d+\.?$/.test(t)) return null;
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }

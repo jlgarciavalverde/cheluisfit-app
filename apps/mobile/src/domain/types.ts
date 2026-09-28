@@ -60,6 +60,11 @@ export interface Food {
    * error de la ficha — no se muestra en pantalla.
    */
   alcoholPer100?: number;
+  /**
+   * Solo en alimentos propios: id del alimento (de Open Food Facts/USDA/ejemplo) que esta versión
+   * corrige. El original deja de salir en búsquedas y el escáner encuentra esta versión.
+   */
+  replaces?: string;
 }
 
 export interface Entry {

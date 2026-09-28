@@ -3,7 +3,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { DayPicker } from "@/components/running/DayPicker";
-import { Callout, Button, Chip, DurationField, FieldGroup, Text, TextField } from "@/components/ui";
+import { Callout, Button, Chip, DurationField, FieldGroup, SegmentedControl, Text, TextField } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useRunning } from "@/data/runningStore";
 import { todayKey } from "@/domain/dates";
@@ -16,6 +16,8 @@ export default function NewSessionScreen() {
   const templates = useRunning((s) => s.templates);
   const addActivity = useRunning((s) => s.addActivity);
 
+  // Carrera o caminata: antes todo lo registrado a mano era carrera.
+  const [type, setType] = useState<"run" | "walk">("run");
   const [title, setTitle] = useState("Carrera");
   const [date, setDate] = useState(params.date ?? todayKey());
   const [km, setKm] = useState("");
@@ -26,7 +28,7 @@ export default function NewSessionScreen() {
   const [notes, setNotes] = useState("");
   const [tried, setTried] = useState(false);
 
-  const check = checkManualRun({ distanceKm: parseNum(km), durationS, avgHr: parseNum(hr) });
+  const check = checkManualRun({ distanceKm: parseNum(km), durationS, avgHr: parseNum(hr), type });
   const distErr = tried && (parseNum(km) === null || (parseNum(km) ?? 0) <= 0);
   const timeErr = tried && (durationS === null || durationS <= 0);
 
@@ -36,9 +38,9 @@ export default function NewSessionScreen() {
     const tpl = templateId ? templates.find((t) => t.id === templateId) : undefined;
     const base = {
       date,
-      type: "run" as const,
+      type,
       source: "manual" as const,
-      title: title.trim() || "Carrera",
+      title: title.trim() || (type === "run" ? "Carrera" : "Caminata"),
       distanceM: Math.round((parseNum(km) as number) * 1000),
       durationS: durationS as number,
       avgHr: parseNum(hr) ? Math.round(parseNum(hr) as number) : undefined,
@@ -46,7 +48,7 @@ export default function NewSessionScreen() {
       notes: notes.trim() || undefined,
     };
     const id = addActivity(tpl ? applyTemplate({ ...base, id: "" }, tpl) : base);
-    toast("Carrera guardada");
+    toast(type === "run" ? "Carrera guardada" : "Caminata guardada");
     router.replace({ pathname: "/sesion/[id]", params: { id } });
   };
 
@@ -60,6 +62,19 @@ export default function NewSessionScreen() {
         <Text variant="caption" color="muted">
           Para carreras que no ha grabado el reloj. Las del Garmin llegan solas al sincronizar.
         </Text>
+        <SegmentedControl
+          testID="s-type"
+          value={type}
+          onChange={(t) => {
+            setType(t);
+            // El nombre por defecto sigue al tipo mientras no se haya escrito otro.
+            setTitle((cur) => (cur === "Carrera" || cur === "Caminata" ? (t === "run" ? "Carrera" : "Caminata") : cur));
+          }}
+          options={[
+            { value: "run", label: "Carrera" },
+            { value: "walk", label: "Caminata" },
+          ]}
+        />
         <TextField testID="s-title" label="Nombre" value={title} onChangeText={setTitle} maxLength={50} />
         <FieldGroup label="Día">
           <DayPicker value={date} onChange={setDate} />

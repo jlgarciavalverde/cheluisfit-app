@@ -3,14 +3,14 @@
     "name": "CheluisFIT",
     "slug": "cheluisfit",
     "scheme": "cheluisfit",
-    "version": "0.14.0",
+    "version": "0.15.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0F0E0D",
     "android": {
       "package": "com.redgarverde.cheluisfit",
-      "versionCode": 1400,
+      "versionCode": 1500,
       "adaptiveIcon": {
         "backgroundColor": "#0F0E0D",
         "foregroundImage": "./assets/android-icon-foreground.png",

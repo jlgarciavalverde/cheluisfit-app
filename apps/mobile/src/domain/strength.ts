@@ -1154,18 +1154,34 @@ export function ghostsFor(
   const warm = refKg && refKg > 0 ? warmupSets(refKg, opts.usesBar === false ? 0 : (opts.barKg ?? 20), opts.step ?? 2.5) : [];
   let w = 0;
   let k = 0;
-  return sets.map((s, i) => {
+  const out: (Ghost | null)[] = [];
+  sets.forEach((s, i) => {
     const prev = previous[i];
     if (s.type === "warmup") {
       const g = warm[w++];
-      if (g) return { kg: g.kg, reps: g.reps };
-      return prev ? { kg: prev.kg, reps: prev.reps } : null;
+      out.push(g ? { kg: g.kg, reps: g.reps } : prev ? { kg: prev.kg, reps: prev.reps } : null);
+      return;
     }
-    if (s.type === "drop") return prev ? { kg: prev.kg, reps: prev.reps } : s.kg !== null ? { kg: s.kg, reps: null } : null;
+    if (s.type === "drop") {
+      if (prev) {
+        out.push({ kg: prev.kg, reps: prev.reps });
+        return;
+      }
+      // Sin drop la última vez: un 20 % menos que la fila de encima (lo escrito o, si no, lo
+      // sugerido). Antes salía «–» si la serie madre solo tenía la sugerencia en gris.
+      const above = sets[i - 1];
+      const aboveKg = above ? (above.kg ?? out[i - 1]?.kg ?? null) : null;
+      const aboveReps = above ? (above.reps ?? out[i - 1]?.reps ?? null) : null;
+      const step = opts.step ?? 2.5;
+      const kg = s.kg ?? (aboveKg !== null && aboveKg > 0 ? Math.max(step, roundToStep(aboveKg * 0.8, step)) : null);
+      out.push(kg === null && aboveReps === null ? null : { kg, reps: aboveReps });
+      return;
+    }
     const p = suggestion.perSet[Math.min(k, suggestion.perSet.length - 1)];
     k += 1;
-    return p ? { kg: p.kg, reps: p.reps } : null;
+    out.push(p ? { kg: p.kg, reps: p.reps } : null);
   });
+  return out;
 }
 
 /** ¿Se puede marcar esta fila como hecha? Faltan datos si no hay reps (ni sugeridas) ni, en ejercicios con peso, kilos. */

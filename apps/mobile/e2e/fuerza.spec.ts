@@ -237,6 +237,15 @@ test.describe("Fuerza · entrenamiento en curso", () => {
     await expect(page.getByTestId("set-row-3")).toContainText("D");
   });
 
+  test("un drop nuevo trae su sugerencia (20 % menos) aunque la serie de encima solo esté sugerida", async ({ page }) => {
+    await start(page, "rt-pecho");
+    await page.getByTestId("set-label-2").click();
+    await page.getByTestId("add-drop-below").click();
+    // la serie 2 sugiere 72,5 kg → el drop, 57,5 (72,5 × 0,8 = 58 → múltiplo de 2,5 más cercano)
+    await expect(page.getByTestId("kg-3")).toHaveAttribute("placeholder", "57,5");
+    await expect(page.getByTestId("reps-3")).not.toHaveAttribute("placeholder", "–");
+  });
+
   test("esfuerzo: RIR y RPE son la misma escala", async ({ page }) => {
     await start(page, "rt-pecho");
     await page.getByTestId("effort-1").click();
@@ -446,6 +455,18 @@ test.describe("Fuerza · historial", () => {
     await page.getByRole("button", { name: "Listo" }).click();
     await page.getByTestId("repeat-workout").click();
     await expect(page.getByTestId("screen-entreno")).toBeVisible();
+  });
+
+  test("corregir el tipo de una serie desde el historial", async ({ page }) => {
+    await page.goto("/fuerza");
+    await page.getByRole("tab", { name: "Historial" }).click();
+    await page.getByTestId(/^workout-/).first().click();
+    await expect(page.getByTestId("screen-detalle")).toBeVisible();
+    await page.getByTestId("edit-set-0-1").click();
+    const title = page.getByRole("heading", { name: /^Corregir serie/ });
+    await expect(title).toHaveText(/^Corregir serie \d$/);
+    await page.getByTestId("edit-type-failure").click();
+    await expect(page.getByText(/· Al fallo$/)).toBeVisible();
   });
 
   test("eliminar un entreno con deshacer", async ({ page }) => {

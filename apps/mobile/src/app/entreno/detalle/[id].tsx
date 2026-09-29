@@ -4,16 +4,19 @@ import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { WorkoutSets } from "@/components/strength/WorkoutSets";
 import { EffortChips } from "@/components/strength/SetsTableSheets";
-import { BottomSheet, BottomSheetForm, Button, Card, EmptyState, FieldGroup, IconButton, Text, TextField } from "@/components/ui";
+import { BottomSheet, BottomSheetForm, Button, Card, Chip, EmptyState, FieldGroup, IconButton, Text, TextField } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { useLibrary, useStrength } from "@/data/strengthStore";
 import { dayLabel } from "@/domain/dates";
 import { fmtDuration, fmtInt, fmtKg, parseNum } from "@/domain/format";
 import {
-  formatEffort,
+  changeSetType,
   routineFromWorkout,
+  SET_TYPE_LABEL,
+  setLabels,
   type SetLog,
+  type SetType,
   workoutPRs,
   workoutTotals,
 } from "@/domain/strength";
@@ -63,6 +66,21 @@ export default function WorkoutDetailScreen() {
     });
     setEditing((cur) => (cur ? { ...cur, set: { ...cur.set, ...p } } : cur));
   };
+  /** Cambiar el tipo también se corrige (antes solo kilos, reps y esfuerzo). Mismas reglas que en el entreno. */
+  const setType = (type: SetType) => {
+    if (!editing) return;
+    const ex = workout.exercises[editing.exIdx];
+    if (!ex) return;
+    const idx = ex.sets.findIndex((s) => s.id === editing.set.id);
+    const sets = changeSetType(ex.sets, idx, type);
+    updateWorkout({ ...workout, exercises: workout.exercises.map((e, i) => (i === editing.exIdx ? { ...e, sets } : e)) });
+    setEditing((cur) => (cur && sets[idx] ? { ...cur, set: sets[idx]! } : cur));
+  };
+  const editingEx = editing ? workout.exercises[editing.exIdx] : undefined;
+  const editingIdx = editing && editingEx ? editingEx.sets.findIndex((s) => s.id === editing.set.id) : -1;
+  const editingLabel = editingEx && editingIdx >= 0 ? setLabels(editingEx.sets)[editingIdx] : undefined;
+  const prevOfEditing = editingEx && editingIdx > 0 ? editingEx.sets[editingIdx - 1] : undefined;
+  const canBeDrop = !!prevOfEditing && prevOfEditing.type !== "warmup";
 
   const begin = () => {
     start(routineFromWorkout(workout), library);
@@ -130,7 +148,9 @@ export default function WorkoutDetailScreen() {
         </View>
       </View>
 
-      <BottomSheet visible={editing !== null} onClose={() => setEditing(null)} title="Corregir serie" subtitle={editing ? workout.exercises[editing.exIdx]?.name : undefined}>
+      <BottomSheet visible={editing !== null} onClose={() => setEditing(null)} title={editingLabel ? `Corregir serie ${editingLabel.label}` : "Corregir serie"}
+        subtitle={editingEx && editing ? `${editingEx.name} · ${SET_TYPE_LABEL[editing.set.type]}` : undefined}
+      >
         <View style={{ gap: space.md }}>
           <View style={{ flexDirection: "row", gap: space.md }}>
             <TextField
@@ -157,7 +177,16 @@ export default function WorkoutDetailScreen() {
               }}
             />
           </View>
-          <FieldGroup label={`Esfuerzo (${effortMode.toUpperCase()})`} hint={`Ahora: ${editing ? formatEffort(editing.set.rpe, effortMode) : ""}`}>
+          <FieldGroup label="Tipo">
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+              {(["normal", "warmup", "failure", "drop"] as const).map((t) =>
+                t === "drop" && !canBeDrop && editing?.set.type !== "drop" ? null : (
+                  <Chip key={t} testID={`edit-type-${t}`} label={SET_TYPE_LABEL[t]} selected={editing?.set.type === t} onPress={() => setType(t)} />
+                ),
+              )}
+            </View>
+          </FieldGroup>
+          <FieldGroup label={`Esfuerzo (${effortMode.toUpperCase()})`}>
             <EffortChips mode={effortMode} current={editing?.set.rpe ?? null} onPick={(rpe) => patch({ rpe })} withNone />
           </FieldGroup>
           <Button label="Listo" fullWidth onPress={() => setEditing(null)} />

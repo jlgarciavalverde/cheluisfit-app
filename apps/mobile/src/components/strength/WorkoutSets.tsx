@@ -1,5 +1,5 @@
 import { Pressable, View } from "react-native";
-import { fmtKg } from "@/domain/format";
+import { fmtDuration, fmtKg } from "@/domain/format";
 import {
   type EffortMode,
   formatEffort,
@@ -12,9 +12,11 @@ import {
   type WorkoutExercise,
 } from "@/domain/strength";
 import { useTheme } from "@/theme/ThemeProvider";
+import { SetTypeBadge } from "./SetRow";
 import { interaction, space } from "@/theme/tokens";
 import { Badge } from "../ui/Badge";
 import { Card } from "../ui/Card";
+import { Icon } from "../ui/Icon";
 import { Text } from "../ui/Text";
 
 export function setValueText(s: SetLog, kind: WorkoutExercise["kind"]): string {
@@ -83,7 +85,7 @@ export function WorkoutSets({
                   }}
                 >
                   <View style={{ minWidth: 30, alignItems: "center" }}>
-                    {l.badge ? <Badge label={`${l.badge}${l.dropIndex > 1 ? l.dropIndex : ""}`} tone={l.badge === "C" ? "warning" : l.badge === "F" ? "danger" : "neutral"} /> : (
+                    {l.badge ? <SetTypeBadge badge={l.badge} dropIndex={l.dropIndex} /> : (
                       <Text variant="bodyStrong" color="muted" tabular>
                         {l.label}
                       </Text>
@@ -95,9 +97,17 @@ export function WorkoutSets({
                   <Text variant="caption" color="muted" tabular>
                     {s.rpe !== null ? `${effortMode.toUpperCase()} ${formatEffort(s.rpe, effortMode)}` : ""}
                   </Text>
-                  <Text variant="caption" color="faint" tabular style={{ width: 44, textAlign: "right" }}>
-                    {s.restS ? `${Math.floor(s.restS / 60)}:${String(s.restS % 60).padStart(2, "0")}` : ""}
-                  </Text>
+                  {/* Descanso de verdad antes de esta serie: antes salía un «2:34» suelto sin decir qué era. */}
+                  <View
+                    style={{ width: 56, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2 }}
+                    accessible={!!s.restS}
+                    accessibilityLabel={s.restS ? `Descansaste ${fmtDuration(s.restS)} antes` : undefined}
+                  >
+                    {s.restS ? <Icon name="timer-outline" size="xs" color="faint" /> : null}
+                    <Text variant="caption" color="faint" tabular>
+                      {s.restS ? fmtDuration(s.restS) : ""}
+                    </Text>
+                  </View>
                 </View>
               );
               return onEditSet ? (

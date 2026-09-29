@@ -74,6 +74,32 @@ function NumCell({
   );
 }
 
+/**
+ * Círculo de color del tipo de serie (C calentamiento, F al fallo, D drop): el mismo en el entreno
+ * en curso, en el resumen y en el historial (antes el resumen usaba otros colores y el drop salía gris).
+ */
+export function SetTypeBadge({ badge, dropIndex }: { badge: NonNullable<SetLabel["badge"]>; dropIndex: number }) {
+  const { c } = useTheme();
+  return (
+    <View
+      style={{
+        minWidth: 30,
+        height: 30,
+        paddingHorizontal: 6,
+        borderRadius: radius.pill,
+        backgroundColor: c[BADGE_COLOR[badge]],
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text variant="control" style={{ color: c.bg }} maxFontSizeMultiplier={1.1}>
+        {badge}
+        {dropIndex > 1 ? dropIndex : ""}
+      </Text>
+    </View>
+  );
+}
+
 /** Una fila de la tabla de series: etiqueta/tipo, anterior, kg, reps, esfuerzo y el check de hecha. */
 export function SetRow({
   index,
@@ -146,22 +172,7 @@ export function SetRow({
         style={{ width: isDrop ? col.serie - 4 : col.serie, height: 44, alignItems: "center", justifyContent: "center" }}
       >
         {l.badge ? (
-          <View
-            style={{
-              minWidth: 30,
-              height: 30,
-              paddingHorizontal: 6,
-              borderRadius: radius.pill,
-              backgroundColor: c[BADGE_COLOR[l.badge]],
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text variant="control" style={{ color: c.bg }} maxFontSizeMultiplier={1.1}>
-              {l.badge}
-              {l.dropIndex > 1 ? l.dropIndex : ""}
-            </Text>
-          </View>
+          <SetTypeBadge badge={l.badge} dropIndex={l.dropIndex} />
         ) : (
           <Text variant="heading" tabular maxFontSizeMultiplier={1.1}>
             {l.label}

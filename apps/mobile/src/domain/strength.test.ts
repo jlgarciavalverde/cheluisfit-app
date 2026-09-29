@@ -689,6 +689,16 @@ describe("valores sugeridos por fila", () => {
     expect(g[5]).toEqual({ kg: 45, reps: 15 });
   });
 
+  it("un drop sin drop la última vez sugiere un 20 % menos que la serie de encima, aunque solo esté sugerida", () => {
+    const current = [newSet("normal"), newSet("drop"), newSet("drop")];
+    const g = ghostsFor(current, sug, [null, null, null]);
+    expect(g[0]).toEqual({ kg: 62.5, reps: 8 });
+    expect(g[1]).toEqual({ kg: 50, reps: 8 }); // 62,5 × 0,8 = 50
+    expect(g[2]).toEqual({ kg: 40, reps: 8 }); // el segundo drop cuelga del primero
+    const typed = ghostsFor([newSet("normal", 100, 6), newSet("drop")], sug, [null, null]);
+    expect(typed[1]).toEqual({ kg: 80, reps: 6 });
+  });
+
   it("sin historial no hay sugerencias de peso", () => {
     const g = ghostsFor([newSet("normal")], suggestNext([], cfg), [null]);
     expect(g[0]).toEqual({ kg: null, reps: 8 });

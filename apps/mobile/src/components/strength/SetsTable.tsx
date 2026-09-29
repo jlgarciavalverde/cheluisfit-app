@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Keyboard, Pressable, View } from "react-native";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { useStrength } from "@/data/strengthStore";
 import {
@@ -118,14 +118,22 @@ export function SetsTable({
           kind={kind}
           effortMode={effortMode}
           hasError={errorId === s.id}
-          onTypePress={() => setTypeFor(s.id)}
+          // Se cierra el teclado antes: en Android, al cerrarse la hoja el foco volvía al campo de
+          // kilos y el teclado se abría solo (visto en el móvil).
+          onTypePress={() => {
+            Keyboard.dismiss();
+            setTypeFor(s.id);
+          }}
           onCopyPrev={() => {
             const prev = previous[i] ?? null;
             if (prev) patchSet(exIdx, s.id, { kg: prev.kg, reps: prev.reps });
           }}
           onCommitKg={(n) => patchSet(exIdx, s.id, { kg: n })}
           onCommitReps={(n) => patchSet(exIdx, s.id, { reps: n })}
-          onEffortPress={() => setEffortFor(s.id)}
+          onEffortPress={() => {
+            Keyboard.dismiss();
+            setEffortFor(s.id);
+          }}
           onComplete={() => complete(s, ghosts[i] ?? null)}
         />
       ))}

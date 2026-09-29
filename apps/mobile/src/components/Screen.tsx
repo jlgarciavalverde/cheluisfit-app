@@ -1,10 +1,12 @@
-import { router } from "expo-router";
+import { router, useFocusEffect, usePathname } from "expo-router";
+import { useCallback, useState } from "react";
 import { KeyboardAvoidingView, ScrollView, View } from "react-native";
 import { type Edge, SafeAreaView } from "react-native-safe-area-context";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { useAuth } from "@/data/authStore";
 import { useBreakpoint, useTheme } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
+import { AI_BUBBLE_PAD, isLiveWorkoutPath, showsWorkoutBar, TAB_BAR_HEIGHT, useBottomChrome, WORKOUT_BAR_PAD } from "./bottomChrome";
 import { IconButton } from "./ui/Button";
 import { Text } from "./ui/Text";
 
@@ -24,6 +26,7 @@ export function Screen({
   footer,
   testID,
   contentPadding = true,
+  reportChrome = true,
 }: {
   children: React.ReactNode;
   variant?: ScreenVariant;
@@ -35,17 +38,20 @@ export function Screen({
   footer?: React.ReactNode;
   testID?: string;
   contentPadding?: boolean;
+  /** `false` fuera del navegador (la pantalla de error de la raíz): no hay foco que seguir. */
+  reportChrome?: boolean;
 }) {
   const { c } = useTheme();
   const { bp } = useBreakpoint();
   const resolvedEdges: Edge[] = edges ?? (variant === "tab" ? ["top"] : ["top", "bottom"]);
   const width = maxWidth ?? (variant === "tab" ? (bp === "wide" ? 1180 : 760) : variant === "form" ? 620 : bp === "wide" ? 900 : 760);
-  // Con un entrenamiento abierto hay una barra flotante sobre la barra de pestañas: se deja hueco.
-  const hasBar = useActiveWorkout((s) => !!s.workout) && !resolvedEdges.includes("bottom");
-  // Con sesión flota la burbuja del asistente abajo a la derecha: sin hueco extra tapaba el final
-  // de la pantalla (visto en el móvil: el último dato de una lista quedaba debajo). Solo al hacer
-  // scroll y sin pie fijo (con pie, la burbuja queda sobre el pie).
-  const hasAiBubble = useAuth((s) => !!s.token) && scroll && !footer && bp !== "wide";
+  const pathname = usePathname();
+  const [footerH, setFooterH] = useState(0);
+  // Lo fijo abajo en esta pantalla: la barra de pestañas o el pie (ver `bottomChrome.ts`).
+  const chrome = variant === "tab" ? TAB_BAR_HEIGHT : footer ? footerH : 0;
+  // Lo que flota encima tapa el final del contenido: se deja hueco para cada capa.
+  const hasBar = useActiveWorkout((s) => !!s.workout) && showsWorkoutBar(pathname);
+  const hasAiBubble = useAuth((s) => !!s.token) && scroll && bp !== "wide" && !isLiveWorkoutPath(pathname);
   const pad = contentPadding ? (bp === "compact" ? space.lg : space.xl) : 0;
   const inner = (
     <View
@@ -54,7 +60,7 @@ export function Screen({
         maxWidth: width,
         alignSelf: "center",
         paddingHorizontal: pad,
-        paddingBottom: space.xl + (hasBar ? 76 : 0) + (hasAiBubble ? 72 : 0),
+        paddingBottom: space.xl + (hasBar ? WORKOUT_BAR_PAD : 0) + (hasAiBubble ? AI_BUBBLE_PAD : 0),
         // Con `scroll={false}` este contenedor necesita altura acotada (heredada del `flex:1`
         // de más arriba) para que un `FlatList` dentro pueda virtualizar de verdad.
         ...(scroll ? null : { flex: 1 }),
@@ -65,6 +71,7 @@ export function Screen({
   );
   return (
     <SafeAreaView testID={testID} edges={resolvedEdges} style={{ flex: 1, backgroundColor: c.bg }}>
+      {reportChrome ? <ReportChrome height={chrome} /> : null}
       {/* Android moderno dibuja de borde a borde y ya no redimensiona con el teclado. */}
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         {scroll ? (
@@ -81,6 +88,7 @@ export function Screen({
         )}
         {footer ? (
           <View
+            onLayout={(e) => setFooterH(Math.round(e.nativeEvent.layout.height))}
             style={{
               borderTopWidth: 1,
               borderTopColor: c.border,
@@ -96,6 +104,13 @@ export function Screen({
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+/** Publica el alto de lo fijo abajo cada vez que la pantalla gana el foco (o cambia estando enfocada). */
+function ReportChrome({ height }: { height: number }) {
+  const setHeight = useBottomChrome((s) => s.setHeight);
+  useFocusEffect(useCallback(() => setHeight(height), [height, setHeight]));
+  return null;
 }
 
 /** Cabecera de pantalla: título grande, subtítulo, atrás (o cerrar en modales) y acciones. */

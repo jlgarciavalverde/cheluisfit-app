@@ -1,11 +1,11 @@
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { takeCreatedExercise } from "@/lib/createdExercise";
 import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { ExercisePicker } from "@/components/strength/ExercisePicker";
 import { RoutineExerciseEditor } from "@/components/strength/RoutineExerciseEditor";
-import { Button, Chip, EmptyState, Text, TextField } from "@/components/ui";
+import { Button, Chip, ConfirmSheet, EmptyState, Text, TextField } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useLibrary, useStrength } from "@/data/strengthStore";
 import { makeId } from "@/domain/running";
@@ -32,6 +32,30 @@ export default function RoutineEditorScreen() {
   const [picking, setPicking] = useState(false);
   const [tried, setTried] = useState(false);
 
+  // Salir sin guardar (flecha, «atrás» de Android o gesto) lo perdía todo sin avisar.
+  const navigation = useNavigation();
+  const initial = useRef(JSON.stringify([name, folder, notes, items])).current;
+  const dirty = JSON.stringify([name, folder, notes, items]) !== initial;
+  const leaving = useRef(false);
+  const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
+  useEffect(
+    () =>
+      navigation.addListener("beforeRemove", (e) => {
+        if (!dirty || leaving.current) return;
+        e.preventDefault();
+        setPendingLeave(() => () => {
+          leaving.current = true;
+          navigation.dispatch(e.data.action);
+        });
+      }),
+    [navigation, dirty],
+  );
+  const leave = () => {
+    leaving.current = true;
+    if (router.canGoBack()) router.back();
+    else router.replace("/fuerza");
+  };
+
   const folders = useMemo(() => [...new Set(routines.map((r) => r.folder).filter(Boolean) as string[])], [routines]);
   const nameBad = name.trim() === "";
   const empty = items.length === 0;
@@ -54,7 +78,7 @@ export default function RoutineEditorScreen() {
     };
     saveRoutine(routine);
     toast(isNew ? "Rutina creada" : "Rutina guardada");
-    router.back();
+    leave();
   };
 
   const totalSets = items.reduce((n, e) => n + e.sets.length, 0);
@@ -67,7 +91,7 @@ export default function RoutineEditorScreen() {
       if (!ex) return;
       const r = routineExerciseFor(ex, 3, 8, 12);
       setItems((l) => [...l, r]);
-      setOpen((o) => new Set(o).add(r.id));
+      setOpen(new Set([r.id]));
     }, []),
   );
 
@@ -77,24 +101,30 @@ export default function RoutineEditorScreen() {
       footer={
         <View style={{ gap: space.sm }}>
           <Text variant="caption" color="muted" tabular>
-            {items.length} ejercicios · {totalSets} series
+            {items.length === 1 ? "1 ejercicio" : `${items.length} ejercicios`} · {totalSets === 1 ? "1 serie" : `${totalSets} series`}
           </Text>
           <Button testID="save-routine" label={isNew ? "Crear rutina" : "Guardar cambios"} size="lg" fullWidth onPress={save} />
         </View>
       }
     >
-      <ScreenHeader title={isNew ? "Nueva rutina" : "Editar rutina"} back />
+      <ScreenHeader
+        title={isNew ? "Nueva rutina" : "Editar rutina"}
+        // La flecha pregunta aquí mismo: en la web `router.back()` va por el historial del
+        // navegador y `beforeRemove` no llega a poder pararlo.
+        onBack={() => (dirty ? setPendingLeave(() => leave) : leave())}
+      />
       <View style={{ gap: space.lg }}>
         <TextField
           testID="rt-name"
           label="Nombre"
           value={name}
           onChangeText={setName}
+          maxLength={60}
           placeholder="Pecho y tríceps"
           error={tried && nameBad ? "Ponle un nombre" : undefined}
         />
         <View style={{ gap: space.sm }}>
-          <TextField label="Carpeta (opcional)" value={folder} onChangeText={setFolder} placeholder="Mi semana" />
+          <TextField label="Carpeta (opcional)" value={folder} onChangeText={setFolder} maxLength={40} placeholder="Mi semana" />
           {folders.length > 0 ? (
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
               {folders.map((f) => (
@@ -117,7 +147,11 @@ export default function RoutineEditorScreen() {
               expanded={open.has(it.id)}
               onToggle={() => toggle(it.id)}
               onChange={(r) => setItems((l) => l.map((x, i) => (i === idx ? r : x)))}
-              onRemove={() => setItems((l) => unlinkSuperset(l, idx).filter((_, i) => i !== idx))}
+              onRemove={() => {
+                const before = items;
+                setItems((l) => unlinkSuperset(l, idx).filter((_, i) => i !== idx));
+                toast(`${byId.get(it.exerciseId)?.name ?? "Ejercicio"} quitado`, { actionLabel: "Deshacer", onAction: () => setItems(before) });
+              }}
               onMove={(d) => setItems((l) => moveItem(l, idx, d))}
               onLinkNext={() => setItems((l) => linkSuperset(l, idx, idx + 1))}
               onUnlink={() => setItems((l) => unlinkSuperset(l, idx))}
@@ -143,9 +177,10 @@ export default function RoutineEditorScreen() {
             variant="danger"
             fullWidth
             onPress={() => {
+              const at = routines.findIndex((r) => r.id === existing.id);
               const removed = deleteRoutine(existing.id);
-              router.back();
-              if (removed) toast(`«${removed.name}» eliminada`, { actionLabel: "Deshacer", onAction: () => restoreRoutine(removed) });
+              leave();
+              if (removed) toast(`«${removed.name}» eliminada`, { actionLabel: "Deshacer", onAction: () => restoreRoutine(removed, at) });
             }}
           />
         ) : null}
@@ -160,13 +195,27 @@ export default function RoutineEditorScreen() {
         onPick={(ex) => {
           const r = routineExerciseFor(ex, 3, 8, 12);
           setItems((l) => [...l, r]);
-          setOpen((o) => new Set(o).add(r.id));
+          // Solo el recién añadido desplegado: con todos abiertos la página se hacía larguísima.
+          setOpen(new Set([r.id]));
           setPicking(false);
         }}
         onCreate={(n) => {
           setPicking(false);
           router.push({ pathname: "/crear-ejercicio", params: { name: n, from: "picker" } });
         }}
+      />
+      <ConfirmSheet
+        visible={pendingLeave !== null}
+        testID="leave-unsaved"
+        title="¿Salir sin guardar?"
+        message={isNew ? "La rutina no se ha creado todavía: se perderá lo que has puesto." : "Se perderán los cambios que has hecho en la rutina."}
+        confirmLabel="Salir sin guardar"
+        onConfirm={() => {
+          const go = pendingLeave;
+          setPendingLeave(null);
+          go?.();
+        }}
+        onClose={() => setPendingLeave(null)}
       />
     </Screen>
   );

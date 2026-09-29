@@ -16,7 +16,7 @@ export function ErrorScreen({ error, retry }: ErrorBoundaryProps) {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <Screen testID="screen-error">
+        <Screen testID="screen-error" reportChrome={false}>
           <View style={{ gap: space.lg, paddingTop: space.xxl }}>
             <EmptyState
               icon="bug-outline"

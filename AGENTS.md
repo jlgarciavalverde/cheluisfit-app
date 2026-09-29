@@ -634,7 +634,8 @@ web` (o `pnpm e2e`, que ya lo hace) para tener `apps/mobile/dist/` al día.
 - **Fuerza**: un entreno olvidado abierto termina 2 min después de la última serie si pasaron más
   de 45 min (`plausibleEnd`); superseries desiguales descansan y vuelven al miembro con series
   pendientes; sustituir conserva el plan; «Repetir» conserva la rutina de origen y el rango de las
-  series de trabajo; 1RM solo con ≤ 12 repeticiones; los drops no cuentan como serie; en los
+  series de trabajo, pero su rutina va marcada `adHoc` y el entreno sale **sin** `routineSnapshot`
+  (0.16: antes «Actualizar rutina» pisaba la rutina de verdad con solo lo hecho aquel día); 1RM solo con ≤ 12 repeticiones; los drops no cuentan como serie; en los
   ejercicios por tiempo se progresa sobre lo último aguantado y no hay «1RM».
 - **Números a la española** (`parseNum`): «1.000» = mil, «1.234,5» = 1234,5.
 
@@ -708,6 +709,20 @@ web` (o `pnpm e2e`, que ya lo hace) para tener `apps/mobile/dist/` al día.
   `sesion/[id]`, `entreno/[id]`…). `AppTabBar` solo lleva la rama móvil; `Tabs` recibe
   `tabBar={isWide ? () => null : ...}` para no duplicar la barra. Los e2e de escritorio corren
   a 1280×800 en `e2e/escritorio.spec.ts` (los demás specs son 390×844 y nunca prueban `isWide`).
+- **Lo que flota abajo** (`WorkoutBar`, burbuja de la IA) se pone encima de lo fijo de la pantalla
+  enfocada: cada `Screen` publica en `components/bottomChrome.ts` el alto de la barra de pestañas o
+  de su `footer` (medido con `onLayout`) al ganar el foco, y deja hueco al final del contenido para
+  cada capa. Antes iban siempre a 68 dp y tapaban el pie de los formularios (visto en el móvil: el
+  editor de rutina con un entreno abierto). La burbuja no se pinta en el entreno en curso (tapaba
+  los círculos de «hecha»). Una `Screen` fuera del navegador lleva `reportChrome={false}`.
+- **`Callout` con texto e interpolaciones** (`Superserie {x}: …`): `children` llega como lista de
+  trozos, no como un solo texto; se envuelve en `<Text>` si hay algún trozo de texto. Antes en
+  Android esas notas salían **vacías** (la web sí las pintaba: fallo solo del móvil).
+- **Editor de rutina**: pregunta «¿Salir sin guardar?» con cambios (flecha propia + `beforeRemove`
+  para el «atrás» de Android; en la web `router.back()` va por el historial y `beforeRemove` no
+  puede pararlo). Los campos mín./máx. guardan el texto y lo aplican al salir (`commitRepRange`).
+- **e2e en la web**: tras elegir en un selector (`Modal`), esperar a que se cierre del todo antes
+  de tocar un campo: al acabar de cerrarse devuelve el foco a donde estaba y se pierde lo escrito.
   React Native Web no refleja `accessibilityState.selected` como `aria-selected` en `role="tab"`
   en esta versión: no depender de ese atributo en tests, comprobar con la URL o el color de fondo.
 

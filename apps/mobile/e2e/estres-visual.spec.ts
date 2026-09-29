@@ -204,6 +204,13 @@ for (const [w, h] of [
       await page.getByRole("tab", { name: "Rutinas" }).click();
       await check(page, `${w}-fuerza-rutinas`);
 
+      // Editor de rutina con nombre largo y un ejercicio desplegado (series, reps, descanso, regla).
+      await page.goto("/rutina/rt-long");
+      await expect(page.getByTestId("screen-rutina")).toBeVisible();
+      await page.getByTestId(/^rex-/).first().getByRole("button").first().click();
+      await expect(page.getByTestId(/^max-/).first()).toBeVisible();
+      await check(page, `${w}-rutina-editor`);
+
       await page.goto("/mas");
       await check(page, `${w}-mas`);
     });

@@ -734,7 +734,7 @@ describe("récords de un entreno", () => {
 });
 
 
-import { cleanupForFinish as finishW, E1RM_MAX_REPS, recordsFrom as recs, replaceExercise as replaceEx, restDecision as restD, routineFromWorkout as fromWorkout, suggestNext as next, type SetLog as Log } from "./strength";
+import { cleanupForFinish as finishW, commitRepRange, E1RM_MAX_REPS, recordsFrom as recs, replaceExercise as replaceEx, restDecision as restD, routineFromWorkout as fromWorkout, suggestNext as next, type SetLog as Log } from "./strength";
 
 describe("fuerza — correcciones de la 0.13", () => {
   const doneAt = (kg: number, reps: number, iso: string): Log => ({ ...newSet("normal", kg, reps), kg, reps, done: true, completedAt: iso });
@@ -780,6 +780,34 @@ describe("fuerza — correcciones de la 0.13", () => {
     const r = fromWorkout(w);
     expect(r.id).toBe("rt-orig");
     expect(r.exercises[0]!.sets.map((x) => [x.repMin, x.repMax])).toEqual([[4, 6], [4, 6]]);
+  });
+
+  it("repetir nunca propone «Actualizar rutina» (pisaba la rutina de verdad con lo hecho aquel día)", () => {
+    const w = startWorkout(null, [], new Date(), "2026-09-21");
+    w.exercises = [{ ...workoutExerciseFrom(ex("a")), sets: [doneAt(100, 5, "2026-09-21T10:05:00Z")] }];
+    w.routineId = "rt-orig";
+    const again = startWorkout(fromWorkout(w), [ex("a"), ex("b")], new Date(), "2026-09-28");
+    expect(again.routineId).toBe("rt-orig"); // sigue contando para «Hoy toca»
+    expect(again.routineSnapshot).toBeUndefined();
+    // Se añade otro ejercicio y se hace: con una rutina normal sería un cambio que ofrecer.
+    again.exercises.push({ ...workoutExerciseFrom(ex("b")), sets: [doneAt(20, 10, "2026-09-28T10:00:00Z")] });
+    again.exercises[0]!.sets = [doneAt(100, 5, "2026-09-28T10:05:00Z")];
+    expect(finishW(again, new Date("2026-09-28T10:30:00Z")).workout.routineUpdate).toBeUndefined();
+  });
+
+  it("mín./máx. de repeticiones: se aplica al salir y solo mueve el otro extremo si se cruza", () => {
+    const r = { repMin: 8, repMax: 12 };
+    expect(commitRepRange(r, "max", "15")).toEqual({ repMin: 8, repMax: 15 }); // antes quedaba 1–15
+    expect(commitRepRange(r, "max", "5")).toEqual({ repMin: 5, repMax: 5 });
+    expect(commitRepRange(r, "min", "14")).toEqual({ repMin: 14, repMax: 14 });
+    expect(commitRepRange(r, "min", "")).toBe(r); // vaciar y salir: se queda como estaba
+    expect(commitRepRange(r, "min", "0")).toBe(r);
+    expect(commitRepRange(r, "max", "999")).toEqual({ repMin: 8, repMax: 200 });
+  });
+
+  it("empezar una rutina guardada sí guarda su foto para comparar al terminar", () => {
+    const routine = { id: "rt-1", name: "Pierna", exercises: [routineExerciseFor(ex("a"))] };
+    expect(startWorkout(routine, [ex("a")], new Date(), "2026-09-28").routineSnapshot?.id).toBe("rt-1");
   });
 
   it("el 1RM no cuenta series de más de 12 repeticiones", () => {

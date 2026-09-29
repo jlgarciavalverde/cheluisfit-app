@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
-import { parseNum } from "@/domain/format";
 import {
+  commitRepRange,
   type Exercise,
   planCounts,
   plannedSets,
@@ -110,25 +111,25 @@ export function RoutineExerciseEditor({
           </View>
 
           <View style={{ flexDirection: "row", gap: space.md, alignItems: "flex-end" }}>
-            <TextField
+            <RepField
               testID={`min-${item.id}`}
               label={isDuration ? "Segundos mín." : "Reps mín."}
-              keyboardType="number-pad"
-              value={String(counts.repMin)}
-              onChangeText={(t) => {
-                const v = parseNum(t);
-                if (v !== null && v > 0 && v <= 200) setPlan({ repMin: Math.round(v), repMax: Math.max(Math.round(v), counts.repMax) });
+              value={counts.repMin}
+              onLive={(t) => {
+                const r = commitRepRange(counts, "min", t);
+                if (r.repMax === counts.repMax) setPlan(r);
               }}
+              onCommit={(t) => setPlan(commitRepRange(counts, "min", t))}
             />
-            <TextField
+            <RepField
               testID={`max-${item.id}`}
               label={isDuration ? "Segundos máx." : "Reps máx."}
-              keyboardType="number-pad"
-              value={String(counts.repMax)}
-              onChangeText={(t) => {
-                const v = parseNum(t);
-                if (v !== null && v > 0 && v <= 200) setPlan({ repMax: Math.round(v), repMin: Math.min(Math.round(v), counts.repMin) });
+              value={counts.repMax}
+              onLive={(t) => {
+                const r = commitRepRange(counts, "max", t);
+                if (r.repMin === counts.repMin) setPlan(r);
               }}
+              onCommit={(t) => setPlan(commitRepRange(counts, "max", t))}
             />
           </View>
 
@@ -192,5 +193,53 @@ export function RoutineExerciseEditor({
         </View>
       ) : null}
     </View>
+  );
+}
+
+/**
+ * Campo de mín./máx.: guarda lo escrito tal cual; `onLive` aplica al momento lo que no mueve el
+ * otro extremo (así «Guardar» pulsado sin salir del campo no pierde lo escrito: en Android ese toque
+ * no quita el foco) y `onCommit`, al salir o con «Hecho», aplica el resto (ver `commitRepRange`).
+ * Vacío o no válido al salir: vuelve a enseñar el valor que había.
+ */
+function RepField({
+  testID,
+  label,
+  value,
+  onLive,
+  onCommit,
+}: {
+  testID: string;
+  label: string;
+  value: number;
+  onLive: (text: string) => void;
+  onCommit: (text: string) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setDraft(String(value));
+  }, [value, editing]);
+  const commit = () => {
+    setEditing(false); // el efecto de arriba vuelve a poner el valor (el nuevo, si ha cambiado)
+    onCommit(draft);
+  };
+  return (
+    <TextField
+      testID={testID}
+      label={label}
+      keyboardType="number-pad"
+      maxLength={3}
+      value={draft}
+      selectTextOnFocus
+      onFocus={() => setEditing(true)}
+      onChangeText={(t) => {
+        const clean = t.replace(/[^0-9]/g, "");
+        setDraft(clean);
+        onLive(clean);
+      }}
+      onBlur={commit}
+      onSubmitEditing={commit}
+    />
   );
 }

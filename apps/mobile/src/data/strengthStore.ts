@@ -30,7 +30,8 @@ export interface StrengthState {
 
   saveRoutine: (r: Routine) => void;
   deleteRoutine: (id: string) => Routine | undefined;
-  restoreRoutine: (r: Routine) => void;
+  /** `at`: posición que tenía (deshacer un borrado la devuelve a su sitio, no al final). */
+  restoreRoutine: (r: Routine, at?: number) => void;
   duplicateRoutine: (id: string) => Routine | undefined;
   addWorkout: (w: Workout) => void;
   updateWorkout: (w: Workout) => void;
@@ -78,7 +79,13 @@ export const useStrength = create<StrengthState>()(
         if (found) set((s) => ({ routines: s.routines.filter((r) => r.id !== id) }));
         return found;
       },
-      restoreRoutine: (r) => set((s) => ({ routines: [...s.routines, r] })),
+      restoreRoutine: (r, at) =>
+        set((s) => {
+          if (s.routines.some((x) => x.id === r.id)) return s;
+          const list = [...s.routines];
+          list.splice(at === undefined || at < 0 ? list.length : Math.min(at, list.length), 0, r);
+          return { routines: list };
+        }),
       duplicateRoutine: (id) => {
         const src = get().routines.find((r) => r.id === id);
         if (!src) return undefined;

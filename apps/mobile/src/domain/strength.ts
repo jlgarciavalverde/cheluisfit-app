@@ -307,6 +307,11 @@ export interface Routine {
   folder?: string;
   notes?: string;
   exercises: RoutineExercise[];
+  /**
+   * Rutina de un solo uso, hecha al vuelo con lo que se hizo en un entreno («Repetir»): nunca se
+   * guarda ni sirve de referencia para proponer «Actualizar rutina» (ver `routineFromWorkout`).
+   */
+  adHoc?: true;
 }
 
 export interface WorkoutPlan {
@@ -361,6 +366,22 @@ export function plannedSets(warmups: number, working: number, repMin: number, re
   ];
 }
 
+/** Tope de repeticiones (o segundos) por serie en el editor de rutinas. */
+export const REP_LIMIT = 200;
+
+/**
+ * Valor escrito en «mín.» o «máx.» al salir del campo. Mientras se escribe no se toca nada: antes
+ * cada tecla se aplicaba al momento y escribir «15» en el máximo pasaba por «1», que bajaba el
+ * mínimo a 1 (quedaba 1–15, o 1–115 si el campo no se dejaba vaciar). Vacío o no válido: se queda
+ * como estaba. El otro extremo solo se mueve si queda cruzado.
+ */
+export function commitRepRange(prev: { repMin: number; repMax: number }, field: "min" | "max", text: string): { repMin: number; repMax: number } {
+  const v = Number(text.replace(",", ".").trim());
+  if (text.trim() === "" || !Number.isFinite(v) || v <= 0) return prev;
+  const n = Math.min(REP_LIMIT, Math.max(1, Math.round(v)));
+  return field === "min" ? { repMin: n, repMax: Math.max(n, prev.repMax) } : { repMax: n, repMin: Math.min(n, prev.repMin) };
+}
+
 export function routineExerciseFor(ex: Exercise, working = 3, repMin = 8, repMax = 12, warmups = 0): RoutineExercise {
   return {
     id: makeId("re"),
@@ -390,6 +411,8 @@ export function workoutExerciseFrom(ex: Exercise, re?: RoutineExercise): Workout
 }
 
 /** Empieza un entrenamiento a partir de una rutina (o vacío). */
+const WEEKDAY = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"] as const;
+
 export function startWorkout(
   routine: Routine | null,
   library: readonly Exercise[],
@@ -404,11 +427,13 @@ export function startWorkout(
   }
   return {
     id: makeId("wk"),
-    name: routine?.name ?? "Entrenamiento",
+    // Sin rutina, con el día: antes todos se llamaban «Entrenamiento» y no se distinguían en el historial.
+    name: routine?.name ?? `Entreno del ${WEEKDAY[now.getDay()]}`,
     date: dateKey,
     startedAt: now.toISOString(),
     routineId: routine?.id,
-    routineSnapshot: routine ? structuredClone(routine) : undefined,
+    // Sin foto de una rutina al vuelo: al terminar no hay nada que proponer actualizar.
+    routineSnapshot: routine && !routine.adHoc ? structuredClone(routine) : undefined,
     exercises,
   };
 }
@@ -791,7 +816,8 @@ export function suggestNext(history: readonly SessionSets[], cfg: ProgressionCon
     return {
       action: "start",
       perSet: fill(n, null, cfg.repMin),
-      reason: `Primera vez: elige un peso con el que llegues a ${cfg.repMin} repeticiones dejando 2 en reserva.`,
+      // El título («Primera vez») ya lo pone la pantalla: antes salía repetido dentro del texto.
+      reason: `Elige un peso con el que llegues a ${cfg.repMin} ${cfg.repMin === 1 ? "repetición" : "repeticiones"} dejando 2 en reserva.`,
     };
   }
   const last = sessions[0];
@@ -1038,11 +1064,17 @@ export function historyFor(workouts: readonly Workout[], exerciseId: string, exc
     });
 }
 
-/** Una rutina con los ejercicios y series de un entreno ya hecho (para «repetir el último»). */
+/**
+ * Una rutina al vuelo con los ejercicios y series de un entreno ya hecho (para «Repetir»).
+ * Lleva el id de la rutina de origen (si la había) para que repetir cuente en «Hoy toca», pero va
+ * marcada `adHoc`: antes, al terminar, se ofrecía «Actualizar rutina» comparando con esta copia, y
+ * aceptarlo sustituía la rutina de verdad por solo lo hecho aquel día (series de menos, ejercicios
+ * saltados perdidos).
+ */
 export function routineFromWorkout(w: Workout): Routine {
   return {
-    // Mismo id que la rutina de origen (si la había): repetir cuenta para «Hoy toca».
     id: w.routineId ?? makeId("rt"),
+    adHoc: true,
     name: w.name,
     exercises: w.exercises.map((e) => ({
       id: makeId("re"),

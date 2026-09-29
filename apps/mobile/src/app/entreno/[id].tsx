@@ -77,6 +77,7 @@ function Runner() {
 
   const workout = useActiveWorkout((s) => s.workout)!;
   const current = useActiveWorkout((s) => s.current);
+  const restRunning = useActiveWorkout((s) => s.rest !== null);
   const setCurrent = useActiveWorkout((s) => s.setCurrent);
   const finish = useActiveWorkout((s) => s.finish);
   const clearActive = useActiveWorkout((s) => s.clearActive);
@@ -233,7 +234,7 @@ function Runner() {
 
         {!ex ? (
           <View style={{ flex: 1 }}>
-            <EmptyState icon="barbell-outline" title="Entrenamiento vacío" text="Añade el primer ejercicio con el botón +." actionLabel="Añadir ejercicio" onAction={() => setPicker("add")} />
+            <EmptyState icon="barbell-outline" title="Entrenamiento vacío" text="Añade el primero para empezar." actionLabel="Añadir ejercicio" onAction={() => setPicker("add")} />
           </View>
         ) : (
           <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xl, gap: space.md }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -307,7 +308,8 @@ function Runner() {
           </ScrollView>
         )}
 
-        <RestBar defaultRestS={ex?.plan.restS ?? 90} />
+        {/* Sin ejercicios no hay nada que descansar (salvo un descanso que ya estuviera en marcha). */}
+        {ex || restRunning ? <RestBar defaultRestS={ex?.plan.restS ?? 90} /> : null}
       </KeyboardAvoidingView>
 
       {/* Menú del ejercicio */}
@@ -391,7 +393,15 @@ function Runner() {
       <ExercisePicker
         visible={picker !== null}
         title={picker === "replace" ? "Sustituir ejercicio" : "Añadir ejercicio"}
-        subtitle={picker === "replace" ? `En lugar de ${ex?.name ?? ""}` : "Se añade después del actual"}
+        subtitle={
+          picker === "replace"
+            ? `En lugar de ${ex?.name ?? ""}`
+            : !ex
+              ? "Será el primero del entrenamiento"
+              : idx >= workout.exercises.length - 1
+                ? "Se añade al final"
+                : `Se añade después de ${ex.name}`
+        }
         suggested={picker === "replace" ? substitutes : undefined}
         excludeIds={workout.exercises.map((e) => e.exerciseId)}
         onClose={() => setPicker(null)}

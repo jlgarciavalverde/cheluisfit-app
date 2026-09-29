@@ -1,3 +1,4 @@
+import { Children } from "react";
 import { View } from "react-native";
 import { useTheme } from "@/theme/ThemeProvider";
 import { type Palette, radius, space } from "@/theme/tokens";
@@ -39,6 +40,9 @@ export function Callout({
     danger: { bg: "dangerSoft", border: "danger", fg: "danger" },
   };
   const t = map[tone];
+  // «Superserie {etiqueta}: …» llega como lista de trozos, no como un solo texto: antes solo se
+  // envolvía en `<Text>` un texto único y en Android esas notas salían vacías (la web sí las pintaba).
+  const isText = Children.toArray(children).some((ch) => typeof ch === "string" || typeof ch === "number");
   return (
     <View
       testID={testID}
@@ -61,7 +65,7 @@ export function Callout({
           ) : null}
         </View>
       ) : null}
-      {typeof children === "string" ? (
+      {isText ? (
         <Text variant={dense ? "caption" : "body"} color="muted">
           {children}
         </Text>

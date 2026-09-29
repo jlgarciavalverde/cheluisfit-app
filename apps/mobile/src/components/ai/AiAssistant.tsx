@@ -6,6 +6,7 @@ import { FullScreenModal } from "@/components/FullScreenModal";
 import { Button, Callout, Icon, Text, TextField } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { api, ApiError, type AiProposal } from "@/data/api";
+import { FLOAT_GAP, isLiveWorkoutPath, showsWorkoutBar, useBottomChrome, WORKOUT_BAR_SPACE } from "@/components/bottomChrome";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { useAuth } from "@/data/authStore";
 import { useRunning } from "@/data/runningStore";
@@ -167,7 +168,8 @@ export function AiAssistant() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const token = useAuth((s) => s.token);
-  const hasWorkoutBar = useActiveWorkout((s) => !!s.workout) && !pathname.startsWith("/entreno/");
+  const hasWorkoutBar = useActiveWorkout((s) => !!s.workout) && showsWorkoutBar(pathname);
+  const chrome = useBottomChrome((s) => s.height);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -175,7 +177,8 @@ export function AiAssistant() {
 
   const section = sectionForPath(pathname);
 
-  if (!token) return null;
+  // En el entreno en curso tapaba el círculo de «hecho» de las series (visto en el móvil).
+  if (!token || (isLiveWorkoutPath(pathname) && !open)) return null;
 
   const resolveProposal = (msgIndex: number, propIndex: number, resolved: "applied" | "discarded") => {
     setMessages((cur) =>
@@ -211,7 +214,7 @@ export function AiAssistant() {
           position: "absolute",
           left: isWide ? space.xl : undefined,
           right: isWide ? undefined : space.md,
-          bottom: isWide ? space.xl : insets.bottom + 68 + (hasWorkoutBar ? 68 : 0),
+          bottom: isWide ? space.xl : insets.bottom + chrome + FLOAT_GAP + (hasWorkoutBar ? WORKOUT_BAR_SPACE : 0),
         }}
       >
         <Pressable

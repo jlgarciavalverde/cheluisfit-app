@@ -7,6 +7,7 @@ import { remainingS } from "@/domain/strength";
 import { useNow } from "@/lib/useNow";
 import { useBreakpoint, useTheme } from "@/theme/ThemeProvider";
 import { elevation, radius, space } from "@/theme/tokens";
+import { FLOAT_GAP, showsWorkoutBar, useBottomChrome } from "../bottomChrome";
 import { Icon } from "../ui/Icon";
 import { Text } from "../ui/Text";
 
@@ -18,8 +19,9 @@ export function WorkoutBar() {
   const workout = useActiveWorkout((s) => s.workout);
   const rest = useActiveWorkout((s) => s.rest);
   const pathname = usePathname();
+  const chrome = useBottomChrome((s) => s.height);
   const now = useNow(1000, !!workout);
-  if (!workout || pathname.startsWith("/entreno/")) return null;
+  if (!workout || !showsWorkoutBar(pathname)) return null;
   const left = rest ? remainingS(rest, now) : null;
   return (
     <View
@@ -28,7 +30,8 @@ export function WorkoutBar() {
         position: "absolute",
         left: isWide ? undefined : 0,
         right: isWide ? space.xl : 0,
-        bottom: isWide ? space.xl : insets.bottom + 68,
+        // Justo encima de lo fijo de la pantalla (pestañas o pie con el botón principal).
+        bottom: isWide ? space.xl : insets.bottom + chrome + FLOAT_GAP,
         width: isWide ? 360 : undefined,
         paddingHorizontal: isWide ? 0 : space.md,
       }}

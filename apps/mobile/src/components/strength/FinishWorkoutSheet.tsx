@@ -50,6 +50,12 @@ export function FinishWorkoutSheet({
             Las series sin marcar se descartarán (y los ejercicios que se queden vacíos).
           </Text>
         ) : null}
+        {doneSets === 0 ? (
+          // Antes el botón salía desactivado sin decir por qué.
+          <Text variant="caption" color="muted" testID="finish-empty-hint">
+            Para guardarlo marca al menos una serie como hecha. Si no vas a entrenar, descártalo.
+          </Text>
+        ) : null}
         <Button testID="finish-save" label="Terminar y guardar" icon="checkmark" size="lg" fullWidth disabled={doneSets === 0} onPress={onSave} />
         <Button label="Seguir entrenando" variant="secondary" fullWidth onPress={onClose} />
         <Button testID="finish-discard" label="Descartar entrenamiento" icon="trash-outline" variant="danger" fullWidth onPress={onDiscard} />

@@ -90,6 +90,81 @@ test.describe("Fuerza · rutinas", () => {
     await expect(page.getByText("A1").first()).toBeVisible();
     await expect(page.getByText("A2").first()).toBeVisible();
   });
+
+  test("repeticiones: escribir 15 en el máximo no toca el mínimo; vaciar y salir deja lo que había", async ({ page }) => {
+    await page.goto("/rutina/new");
+    await page.getByTestId("rt-name").fill("ZZ rangos");
+    await page.getByTestId("add-exercise").click();
+    await page.getByTestId("picker-search").fill("press banca");
+    await page.getByTestId("ex-Barbell_Bench_Press_-_Medium_Grip").click();
+    // En la web el selector, al acabar de cerrarse, devuelve el foco a donde estaba: se espera a que termine.
+    await expect(page.getByTestId("picker-search")).toHaveCount(0);
+    await page.waitForTimeout(500);
+    const max = page.getByTestId(/^max-/);
+    const min = page.getByTestId(/^min-/);
+    await max.fill("");
+    await max.pressSequentially("15");
+    await max.blur();
+    await expect(min).toHaveValue("8");
+    await expect(max).toHaveValue("15");
+    await min.fill("");
+    await min.blur();
+    await expect(min).toHaveValue("8");
+    await expect(page.getByText("3 × 8–15")).toBeVisible();
+  });
+
+  test("salir del editor con cambios sin guardar pregunta antes", async ({ page }) => {
+    await page.goto("/fuerza");
+    await page.getByRole("tab", { name: "Rutinas" }).click();
+    await page.getByTestId("new-routine").click();
+    await page.getByTestId("rt-name").fill("ZZ sin guardar");
+    await page.getByRole("button", { name: "Volver", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "¿Salir sin guardar?" })).toBeVisible();
+    await page.getByTestId("leave-unsaved-cancel").click();
+    await expect(page.getByTestId("rt-name")).toHaveValue("ZZ sin guardar");
+    await page.getByRole("button", { name: "Volver", exact: true }).click();
+    await page.getByTestId("leave-unsaved-confirm").click();
+    await expect(page.getByTestId("screen-fuerza")).toBeVisible();
+    await expect(page.getByText("ZZ sin guardar")).toHaveCount(0);
+  });
+
+  test("sin cambios se sale sin preguntar, y guardar no pregunta", async ({ page }) => {
+    await page.goto("/fuerza");
+    await page.getByRole("tab", { name: "Rutinas" }).click();
+    await page.getByTestId("edit-rt-pecho").click();
+    await page.getByRole("button", { name: "Volver", exact: true }).click();
+    await expect(page.getByTestId("screen-fuerza")).toBeVisible();
+    await page.getByTestId("edit-rt-pecho").click();
+    await page.getByTestId("rt-name").fill("Pecho nuevo");
+    await page.getByTestId("save-routine").click();
+    await expect(page.getByTestId("screen-fuerza")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "¿Salir sin guardar?" })).toHaveCount(0);
+    await expect(page.getByText("Pecho nuevo").first()).toBeVisible();
+  });
+
+  test("con un entreno abierto, la barra «en curso» no tapa el pie del editor de rutina", async ({ page }) => {
+    await start(page, "rt-pecho");
+    await page.getByTestId("minimize").click();
+    await page.getByRole("tab", { name: "Rutinas" }).click();
+    await page.getByTestId("edit-rt-pecho").click();
+    const bar = (await page.getByTestId("workout-bar").boundingBox())!;
+    const save = (await page.getByTestId("save-routine").boundingBox())!;
+    const footerTop = (await page.getByTestId("screen-rutina").getByText(/ejercicios? · \d+ series?$/).boundingBox())!.y;
+    expect(bar.y + bar.height).toBeLessThanOrEqual(footerTop);
+    expect(bar.y + bar.height).toBeLessThanOrEqual(save.y);
+  });
+
+  test("quitar un ejercicio de la rutina se puede deshacer", async ({ page }) => {
+    await page.goto("/fuerza");
+    await page.getByRole("tab", { name: "Rutinas" }).click();
+    await page.getByTestId("edit-rt-pecho").click();
+    const before = await page.getByTestId(/^rex-/).count();
+    await page.getByRole("button", { name: /Press banca con barra/ }).first().click();
+    await page.getByRole("button", { name: "Quitar de la rutina" }).click();
+    await expect(page.getByTestId(/^rex-/)).toHaveCount(before - 1);
+    await page.getByRole("button", { name: "Deshacer" }).click();
+    await expect(page.getByTestId(/^rex-/)).toHaveCount(before);
+  });
 });
 
 test.describe("Fuerza · entrenamiento en curso", () => {
@@ -313,6 +388,34 @@ test.describe("Fuerza · entrenamiento en curso", () => {
     await page.getByTestId("finish-save").click();
     await expect(page.getByTestId("screen-resumen")).toBeVisible();
     await expect(page.getByTestId("update-routine")).toHaveCount(0);
+  });
+
+  test("repetir el último no propone «Actualizar rutina» (pisaba la rutina de verdad)", async ({ page }) => {
+    await page.goto("/fuerza");
+    await page.getByTestId("repeat-last").click();
+    await expect(page.getByTestId("screen-entreno")).toBeVisible();
+    await page.getByTestId("circle-add").click();
+    await page.getByTestId("picker-search").fill("dominadas");
+    await page.getByTestId("ex-Pullups").click();
+    await page.getByTestId("reps-0").fill("8");
+    await page.getByTestId("done-0").click();
+    await page.getByTestId("finish").click();
+    await page.getByTestId("finish-save").click();
+    await expect(page.getByTestId("screen-resumen")).toBeVisible();
+    await expect(page.getByTestId("update-routine")).toHaveCount(0);
+  });
+
+  test("entrenamiento vacío: nombre con el día, sin descanso suelto y explica por qué no se guarda", async ({ page }) => {
+    await page.goto("/fuerza");
+    await page.getByTestId("start-empty").click();
+    await expect(page.getByTestId("workout-name")).toHaveText(/^Entreno del (lunes|martes|miércoles|jueves|viernes|sábado|domingo)$/);
+    await expect(page.getByTestId("rest-start")).toHaveCount(0);
+    await page.getByTestId("finish").click();
+    await expect(page.getByTestId("finish-save")).toBeDisabled();
+    await expect(page.getByTestId("finish-empty-hint")).toBeVisible();
+    await page.getByRole("button", { name: "Seguir entrenando" }).click();
+    await page.getByRole("button", { name: "Añadir ejercicio" }).first().click();
+    await expect(page.getByText("Será el primero del entrenamiento")).toBeVisible();
   });
 
   test("entrenamiento vacío: añadir ejercicios y terminar", async ({ page }) => {

@@ -74,17 +74,25 @@ export default function FuerzaScreen() {
     return [...m.entries()];
   }, [routines]);
 
+  const activeDone = active ? active.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0) : 0;
+  const activeAgeS = active ? (Date.now() - new Date(active.startedAt).getTime()) / 1000 : 0;
+  // Uno abierto hace mucho y sin nada marcado casi siempre es un «Entrenamiento vacío» olvidado.
+  const activeStale = !!active && activeDone === 0 && activeAgeS > 12 * 3600;
   const activeCard = active ? (
     <Card testID="active-card" accent="brand" style={{ gap: space.md }}>
       <View style={{ gap: 2 }}>
         <Overline color="brandText">Entrenamiento en curso</Overline>
         <Text variant="heading">{active.name}</Text>
         <Text variant="caption" color="muted" tabular>
-          {active.exercises.length} ejercicios ·{" "}
-          {active.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0)} series hechas ·{" "}
-          {fmtDuration((Date.now() - new Date(active.startedAt).getTime()) / 1000)}
+          {active.exercises.length === 1 ? "1 ejercicio" : `${active.exercises.length} ejercicios`} ·{" "}
+          {activeDone === 1 ? "1 serie hecha" : `${activeDone} series hechas`} · {fmtDuration(activeAgeS)}
         </Text>
       </View>
+      {activeStale ? (
+        <Text variant="caption" color="warning" testID="active-stale">
+          Lo empezaste hace más de 12 horas y no tiene ninguna serie marcada. Si ya no lo vas a hacer, descártalo.
+        </Text>
+      ) : null}
       <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
         <Button
           testID="continue-workout"
@@ -125,6 +133,11 @@ export default function FuerzaScreen() {
             />
           ) : null}
         </View>
+        {routines.length === 0 ? (
+          <Text variant="caption" color="muted" testID="train-no-routines">
+            Las rutinas que crees en «Rutinas» aparecen aquí para empezarlas con un toque.
+          </Text>
+        ) : null}
       </Section>
       {folders.map(([folder, list]) => {
         const visible = list.filter((r) => r.id !== suggested?.id);
@@ -170,7 +183,11 @@ export default function FuerzaScreen() {
               onEdit={() => router.push({ pathname: "/rutina/[id]", params: { id: r.id } })}
               onDuplicate={() => {
                 const c = duplicateRoutine(r.id);
-                if (c) toast(`Duplicada como «${c.name}»`);
+                if (c)
+                  toast(`Duplicada como «${c.name}»`, {
+                    actionLabel: "Editar",
+                    onAction: () => router.push({ pathname: "/rutina/[id]", params: { id: c.id } }),
+                  });
               }}
             />
           ))}

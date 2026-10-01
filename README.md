@@ -55,8 +55,8 @@ apps/server/src
                                               ver AGENTS.md y `docs/plan-social.md`)
 ```
 
-El plan completo (stack, decisiones, diseño de pantallas) está en
-`~/.claude/plans/merry-inventing-stearns.md`.
+Las decisiones de arquitectura y dominio están documentadas en `AGENTS.md` y el diseño del
+modo social en `docs/plan-social.md`.
 
 ## Copias de seguridad y cómo restaurar
 

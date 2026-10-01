@@ -615,7 +615,7 @@ web` (o `pnpm e2e`, que ya lo hace) para tener `apps/mobile/dist/` al día.
   (`purgeExpiredSessions`); `db.close()` al cerrar. CSP con `raw.githubusercontent.com` y
   `wger.de` en `img-src` (las fotos del catálogo; sin eso la web no enseñaba ninguna — los e2e no lo
   ven porque sirven la web sin Helmet).
-- **git** en la raíz desde 2026-09-28 (local, sin remoto, decisión del usuario). Un commit por versión.
+- **git** en la raíz desde 2026-09-28; remoto en GitHub (`jlgarciavalverde/cheluisfit`, privado) desde 2026-10-01. Un commit por versión.
 
 ## Reglas de datos que fijó la 0.13 (no deshacer sin motivo)
 

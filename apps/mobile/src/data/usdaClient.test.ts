@@ -1,11 +1,16 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { searchUsdaFoods, UsdaError } from "./usdaClient";
+
+beforeEach(() => vi.stubEnv("EXPO_PUBLIC_USDA_API_KEY", "clave-de-test"));
 
 function mockFetchOnce(body: unknown, ok = true, status = 200) {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok, status, json: () => Promise.resolve(body) }));
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe("searchUsdaFoods", () => {
   it("usa sugars (id 2000) cuando está, y title-case el nombre (USDA lo da en mayúsculas)", async () => {

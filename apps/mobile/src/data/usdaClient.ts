@@ -8,10 +8,12 @@
 import type { Food, Nutrients } from "@/domain/types";
 
 /**
- * Clave gratuita de api.data.gov (sin coste, sin tarjeta) — no es un secreto sensible, solo
- * limita peticiones por IP; se puede sustituir por `EXPO_PUBLIC_USDA_API_KEY` sin tocar código.
+ * Clave gratuita de api.data.gov (sin coste, sin tarjeta), en la variable `EXPO_PUBLIC_USDA_API_KEY`.
+ * No está horneada en el código a propósito: el repo es público y, aunque no es un secreto sensible,
+ * cualquiera podría gastar la cuota (1000 peticiones/hora por clave) con una clave visible. Se lee
+ * en cada llamada (no al importar) para respetar los tests y el arranque de Expo.
  */
-const USDA_API_KEY = process.env.EXPO_PUBLIC_USDA_API_KEY || "EXPO_PUBLIC_USDA_API_KEY";
+const usdaApiKey = () => process.env.EXPO_PUBLIC_USDA_API_KEY ?? "";
 const USDA_TIMEOUT_MS = 5000;
 const PAGE_SIZE = 15;
 
@@ -89,10 +91,14 @@ function toFood(f: UsdaFood): Food {
  * eso debe detener la búsqueda o simplemente quedarse con los resultados locales.
  */
 export async function searchUsdaFoods(query: string): Promise<Food[]> {
+  const key = usdaApiKey();
+  if (!key) {
+    throw new UsdaError("Falta la clave de USDA: define EXPO_PUBLIC_USDA_API_KEY (gratis en https://api.data.gov)");
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), USDA_TIMEOUT_MS);
   try {
-    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(query)}&pageSize=${PAGE_SIZE}`;
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${key}&query=${encodeURIComponent(query)}&pageSize=${PAGE_SIZE}`;
     const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) throw new UsdaError(`USDA FoodData Central respondió ${res.status}`);
     const json = (await res.json()) as { foods?: UsdaFood[] };

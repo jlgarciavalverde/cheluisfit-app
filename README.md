@@ -31,6 +31,10 @@ pnpm e2e                        # exporta la web y pasa Playwright + axe (156 pr
 cd ../server && pnpm test       # tests del servidor (36)
 ```
 
+La búsqueda en vivo de alimentos de **USDA** necesita una clave gratuita de
+[api.data.gov](https://api.data.gov) en la variable `EXPO_PUBLIC_USDA_API_KEY` (sin ella la
+búsqueda local y Open Food Facts funcionan igual; la app avisa de que falta la clave).
+
 **Expo Go ya no basta** para probar la app completa: las notificaciones de fin de descanso y
 Health Connect (Garmin) son módulos nativos que solo existen en un APK/*development build*
 (`npx expo run:android`). Expo Go sigue sirviendo para iterar rápido en el resto de pantallas.
@@ -105,3 +109,9 @@ De lo más cercano a lo más lejano:
 - **Vídeos propios de ejercicios de Fuerza** (hoy son fotos de free-exercise-db).
 - **Recuperación de contraseña**: el esquema de cuentas no la tiene, a diferencia de Compra en
   Familia — se puede añadir copiando su patrón si hace falta.
+
+## Licencia
+
+Código bajo [MIT](LICENSE) © José Luis García Valverde. Los datos de terceros (Open Food
+Facts, USDA, catálogo de ejercicios, GIF) conservan sus propias licencias: ver
+[NOTICE.md](NOTICE.md).

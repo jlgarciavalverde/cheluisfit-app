@@ -14,7 +14,7 @@ export class OffError extends Error {}
 
 function userAgent(): string {
   const version = appConfig.expo.version ?? "0.0.0";
-  return `CheluisFIT/${version} (jlgarciavalverde@users.noreply.github.com)`;
+  return `CheluisFIT/${version} (+https://github.com/jlgarciavalverde/cheluisfit-app)`;
 }
 
 function reliabilityFromCompleteness(completeness: unknown): Reliability {

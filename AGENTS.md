@@ -397,9 +397,11 @@ web` (o `pnpm e2e`, que ya lo hace) para tener `apps/mobile/dist/` al día.
   estado `"error"` (OFF no contactable, distinto de "no existe") con reintentar y crear a mano, y
   lleva el motivo real (`message`) hasta la pantalla (`scan-error-detail`).
 - **`searchFoods()` (buscador de texto) mezcla lo local con USDA FoodData Central en vivo**
-  (`src/data/usdaClient.ts`, `GET api.nal.usda.gov/fdc/v1/foods/search`, clave gratuita de
-  api.data.gov — no es secreto sensible, solo limita peticiones por IP, 1000/hora). Es en
-  inglés: no traduce, así que "lentejas con chorizo" no lo va a encontrar aunque tenga 600.000
+  (`src/data/usdaClient.ts`, `GET api.nal.usda.gov/fdc/v1/foods/search`). La clave gratuita de
+  api.data.gov vive **solo** en la variable `EXPO_PUBLIC_USDA_API_KEY` — el repo es público y
+  una clave horneada la gastaría cualquiera (1000 peticiones/hora por clave); sin clave,
+  `searchUsdaFoods()` lanza `UsdaError` con un mensaje claro y el buscador sigue funcionando
+  con lo local. Es en inglés: no traduce, así que "lentejas con chorizo" no lo va a encontrar aunque tenga 600.000
   alimentos — por eso los platos caseros españoles concretos (lentejas con chorizo, macarrones
   con atún, paella, fabada...) están precargados a mano en `seed.ts`, con valores de tablas
   orientativos (ninguna base de datos gratuita los tiene con ese nombre exacto). A los

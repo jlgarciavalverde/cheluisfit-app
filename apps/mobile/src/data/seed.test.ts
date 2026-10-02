@@ -68,7 +68,11 @@ describe("búsqueda simulada", () => {
 });
 
 describe("búsqueda: mezcla con USDA en vivo", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(() => vi.stubEnv("EXPO_PUBLIC_USDA_API_KEY", "clave-de-test"));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
 
   it("añade resultados de USDA sin exigirles coincidencia palabra a palabra (USDA ya filtró)", async () => {
     vi.stubGlobal(
@@ -155,7 +159,11 @@ describe("búsqueda por código de barras", () => {
 });
 
 describe("búsqueda: correcciones de la 0.13", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(() => vi.stubEnv("EXPO_PUBLIC_USDA_API_KEY", "clave-de-test"));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   const usdaHit = { fdcId: 777, description: "CHICKEN, BROILER, BREAST", foodNutrients: [{ nutrientId: 1008, value: 120 }] };
 
   it("un resultado de USDA ya usado sigue apareciendo (con su copia guardada)", async () => {

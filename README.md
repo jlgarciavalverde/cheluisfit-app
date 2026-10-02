@@ -1,22 +1,67 @@
 # CheluisFIT
 
-App de fitness para uso personal y de amigos y familia: **nutrición**, **running**,
-fútbol y fuerza. Android nativo (APK) y web.
+App de fitness para uso personal y de amigos y familia: **nutrición**, **running** y **fuerza**.
+Android nativo (APK propio, sin tiendas) y **web**, con datos **en el dispositivo primero** y
+sincronización opcional con un **servidor propio**.
 
-**Estado:** la app funciona con datos en el dispositivo y **servidor propio** (`apps/server`,
-Fastify: cuentas, sincronización y fotos) desplegado en el VPS casero
-(`node tools/deploy.mjs <versión>` desde la raíz). Alimentos por código de barras vía **Open
-Food Facts en vivo**, buscador de texto ampliado con **USDA FoodData Central en vivo**
-(+600.000 alimentos, gratis, más los platos caseros españoles precargados en `seed.ts` — USDA es
-en inglés y no los encuentra por su nombre), y actividades reales de **Garmin, vía Android
-Health Connect** (`react-native-health-connect` — requiere que Garmin Connect tenga activado el
-interruptor de escritura en Health Connect, y un *development build*, no Expo Go). **Asistente
-de IA** (Gemini con Groq de respaldo, gratis, ver `AGENTS.md`) en una burbuja flotante en
-cualquier pantalla: recomienda comidas, comenta el rendimiento y puede proponer cambios que la
-persona confirma antes de que se apliquen — necesita `GEMINI_API_KEY`/`GROQ_API_KEY` en el
-`.env` del servidor. **Modo social** (pestaña Social): perfiles públicos u opcionalmente
-privados, seguir gente, feed con posts vinculados a una carrera o entreno real (o libres, con
-fotos), comentarios y likes — el diseño completo está en `docs/plan-social.md`.
+| Hoy | Nutrición | Running | Fuerza |
+|---|---|---|---|
+| ![Hoy](docs/capturas/hoy.png) | ![Nutrición](docs/capturas/nutricion.png) | ![Running](docs/capturas/running.png) | ![Fuerza](docs/capturas/fuerza.png) |
+
+*Capturas reales de la app (datos de ejemplo), tema oscuro.*
+
+## Qué hace
+
+- **Nutrición** — diario de comidas con kcal y macros (proteína/hidratos/grasa/fibra), objetivo
+  calculado para ti con **TDEE adaptativo** que corrige el objetivo según cómo responde tu peso
+  real (siempre con tu confirmación), registro de peso y medidas, escáner de **código de barras**
+  con **Open Food Facts en vivo**, buscador de texto ampliado con **USDA FoodData Central** en
+  vivo (+600.000 alimentos, más los platos caseros españoles precargados) y escaneo de producto
+  **por foto con IA**.
+- **Running** — registro de carreras y caminatas, plantillas de entrenamiento (series, rodajes,
+  tiradas), plan semanal, récords personales (mejor ritmo, marcas 5K/10K/media), gráficas de
+  progreso e importación real desde **Garmin vía Android Health Connect** o **Strava** (OAuth2,
+  con recorrido GPS).
+- **Fuerza** — rutinas con progresión de cargas, biblioteca de **~3.000 ejercicios** con foto o
+  GIF animado, entreno en curso con temporizador de descanso y notificaciones, récords (1RM),
+  historial y "repetir el último entreno".
+- **Asistente de IA** — burbuja flotante (Gemini, con Groq de respaldo) que conoce tu contexto
+  real (lo que comiste, tus carreras, tus entrenos) y **propone** cambios que tú confirmas antes
+  de que se apliquen — nunca escribe nada por su cuenta.
+- **Modo social** — perfiles públicos o privados, seguir gente, feed con posts vinculados a una
+  carrera o entreno real (con snapshot, no tus datos), comentarios y likes.
+- **Local-first de verdad** — funciona sin cuenta y sin red; con cuenta, sincroniza los datos
+  entre dispositivos con control de versiones optimista (y copia local en caso de conflicto).
+  Exporta tus datos en JSON cuando quieras.
+
+## Cómo está hecho
+
+```mermaid
+flowchart LR
+    subgraph Móvil["apps/mobile — Expo 57 / React Native (APK + web)"]
+        UI["Pantallas<br/>(Expo Router)"] --> Domain["Lógica pura<br/>domain/ (testeada)"]
+        Domain --> Stores["Tiendas zustand<br/>persistidas en AsyncStorage<br/>¡local-first!"]
+        UI --> Catalog["Catálogo ~3.000 ejercicios<br/>con foto/GIF"]
+    end
+    subgraph Servidor["apps/server — Fastify 5 / node:sqlite (opcional)"]
+        Blobs["Sincronización de blobs<br/>(versionado optimista, 409)"]
+        Cuentas["Cuentas e invitaciones"]
+        IA["Proxy de IA<br/>(Gemini + Groq)"]
+        Social["Modo social<br/>(perfiles, feed, fotos)"]
+    end
+    Stores <-- "HTTPS · blobs completos" --> Blobs
+    UI --> IA
+    UI --> Social
+    UI --> Cuentas
+    OFF["Open Food Facts<br/>(código de barras)"] --> Móvil
+    USDA["USDA FoodData Central<br/>(buscador)"] --> Móvil
+    HC["Garmin → Android<br/>Health Connect"] --> Móvil
+    StravaAPI["Strava API<br/>(OAuth2)"] --> Servidor
+```
+
+Decisiones de arquitectura y dominio (por qué blobs enteros en vez de tablas normalizadas, cómo
+se resuelven conflictos, límites de la IA, la integración con Garmin/Strava pieza a pieza…):
+[`AGENTS.md`](AGENTS.md) — la fuente única de verdad para cualquier agente que toque el código.
 
 ## Arrancar
 
@@ -26,9 +71,9 @@ pnpm install
 cd apps/mobile
 npx expo start --web            # navegador: http://localhost:8081
 npx expo start --android        # emulador Android (instala Expo Go solo)
-pnpm typecheck && pnpm test     # comprobaciones (tipos + lógica)
-pnpm e2e                        # exporta la web y pasa Playwright + axe (156 pruebas)
-cd ../server && pnpm test       # tests del servidor (36)
+pnpm typecheck && pnpm test     # comprobaciones (tipos + lógica, ~300 tests)
+pnpm e2e                        # exporta la web y pasa Playwright + axe (~156 pruebas)
+cd ../server && pnpm test       # tests del servidor
 ```
 
 La búsqueda en vivo de alimentos de **USDA** necesita una clave gratuita de
@@ -43,24 +88,17 @@ Health Connect (Garmin) son módulos nativos que solo existen en un APK/*develop
 
 ```
 apps/mobile/src
-  app/         rutas (Expo Router): (tabs)/ = Hoy, Nutrición, Running, Fuerza, Más
-  components/  ui/ = sistema de diseño; nutrition/, running/, charts/
-  domain/      lógica pura sin React Native (objetivos, nutrientes, GTIN, running)
-  data/        estado local (zustand+AsyncStorage) + datos de ejemplo + Open Food Facts
-               (`offClient.ts`) + USDA FoodData Central (`usdaClient.ts`) + Health Connect
-               (`healthConnect.ts`) + cliente del servidor (`api.ts`, `authStore.ts`, `sync.ts`)
-  components/ai/AiAssistant.tsx  burbuja flotante del asistente de IA (ver AGENTS.md)
-  components/social/  Avatar, PostCard — piezas reutilizadas por la pestaña Social y app/social/*
-  theme/       tokens de color/tipografía y ThemeProvider (oscuro/claro)
+  app/         rutas (Expo Router): (tabs)/ = Hoy, Nutrición, Running, Fuerza, Social, Más
+  components/  ui/ = sistema de diseño; nutrition/, running/, charts/, ai/, social/
+  domain/      lógica pura sin React Native (objetivos, nutrientes, GTIN, running, TDEE)
+  data/        estado local (zustand+AsyncStorage) + datos de ejemplo + clientes de red
+               (Open Food Facts, USDA, Health Connect/Garmin, servidor, Strava)
 apps/server/src
   db.ts, auth.ts, app.ts, server.ts, routes/  Fastify + node:sqlite: cuentas, sincronización
-                                              de los blobs de cada tienda, fotos, el proxy de IA
-                                              (`routes/ai.ts`) y lo social (`routes/social.ts`,
-                                              ver AGENTS.md y `docs/plan-social.md`)
+                                              de blobs, fotos, proxy de IA y modo social
 ```
 
-Las decisiones de arquitectura y dominio están documentadas en `AGENTS.md` y el diseño del
-modo social en `docs/plan-social.md`.
+Las decisiones de diseño del modo social están en `docs/plan-social.md`.
 
 ## Copias de seguridad y cómo restaurar
 

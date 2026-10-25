@@ -16,14 +16,17 @@ import { toast } from "@/components/ui/Toast";
 // incluso en datos móviles (verificado contra el servidor real: respuesta en ~2 s).
 const MAX_SIDE = 960;
 
-export async function captureAiPhoto(): Promise<string | null> {
+/** `library`: elegir una foto ya hecha (la galería no pide permiso en Android 13+, usa el selector del sistema). */
+export async function captureAiPhoto(source: "camera" | "library" = "camera"): Promise<string | null> {
   try {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      toast("Necesito permiso para usar la cámara");
-      return null;
+    if (source === "camera") {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        toast("Necesito permiso para usar la cámara");
+        return null;
+      }
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    const result = source === "camera" ? await ImagePicker.launchCameraAsync({ quality: 0.8 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
     if (result.canceled) return null;
     const { uri, width, height } = result.assets[0];
     // Por el lado largo (una foto vertical saldría de 960×1280 si se fijara solo el ancho) y

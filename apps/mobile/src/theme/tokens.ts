@@ -197,3 +197,25 @@ export const typeScale: Record<
 /** Ancho mínimo (px) a partir del cual se usa la barra lateral y dos columnas. */
 export const WIDE = 1024;
 export const MEDIUM = 640;
+
+/**
+ * Colores de la escena 3D de la Nevera (`components/fridge/`). Three.js necesita colores
+ * literales, no estilos; viven aquí para no saltarse la regla de «ningún hex fuera de tokens».
+ * Los alimentos van por categoría (mismas claves que `FRIDGE_CATEGORIES` de `domain/fridge.ts`).
+ */
+export const fridgeScene = {
+  light: { background: "#F0EAE2", body: "#F6F8FA", inner: "#E2E9EE", edge: "#AEB8C1", glass: "#A9CCE3", drawer: "#C9DCE8", light: "#FFF8E8", selected: "#CC3E0C" },
+  dark: { background: "#1A1816", body: "#D5DADF", inner: "#C3CDD5", edge: "#8E99A3", glass: "#A9CCE3", drawer: "#B7CCDA", light: "#FFF1D6", selected: "#FF5B2E" },
+  category: {
+    lacteo: "#6FA8DC",
+    carne: "#C9504A",
+    pescado: "#7FA7C4",
+    fruta: "#E8A23A",
+    verdura: "#4F9A55",
+    bebida: "#2BA59A",
+    salsa: "#B5532F",
+    huevos: "#E9D2A6",
+    sobras: "#9C7BB8",
+    otros: "#9A9188",
+  },
+} as const;

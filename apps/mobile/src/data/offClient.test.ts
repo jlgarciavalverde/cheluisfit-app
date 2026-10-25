@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchOffProduct, OffError } from "./offClient";
+import { fetchOffProduct, OffError , servingsFrom } from "./offClient";
+
 
 function mockFetchOnce(body: unknown, ok = true, status = 200) {
   vi.stubGlobal(
@@ -104,8 +105,6 @@ describe("fetchOffProduct", () => {
     await expect(fetchOffProduct("8480000123456")).rejects.toThrow(/no code or invalid code/);
   });
 });
-
-import { servingsFrom } from "./offClient";
 
 describe("raciones de Open Food Facts", () => {
   it("ración de la etiqueta y envase, sin repetir ni aceptar tamaños absurdos", () => {

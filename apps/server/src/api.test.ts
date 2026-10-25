@@ -334,6 +334,57 @@ describe("asistente de IA", () => {
     const r = await call("POST", "/api/ai/chat", token, body);
     expect(r.status).toBe(502);
   });
+  it("un contexto demasiado largo se recorta en vez de romper el chat", async () => {
+    generateTextMock.mockResolvedValueOnce({ text: "Vale.", toolCalls: [] });
+    const r = await call("POST", "/api/ai/chat", token, { ...body, context: "x".repeat(9000) });
+    expect(r.status).toBe(200);
+    const instructions = generateTextMock.mock.calls.at(-1)?.[0].instructions as string;
+    expect(instructions.length).toBeLessThan(9000);
+  });
+
+  it("add_meal_entry admite otra fecha («ayer cené…»)", async () => {
+    generateTextMock.mockResolvedValueOnce({
+      text: "",
+      toolCalls: [{ toolName: "add_meal_entry", input: { name: "Pizza", meal: "dinner", date: "2026-10-24", grams: 300, kcal: 800, protein: 30, carbs: 90, fat: 30 } }],
+    });
+    const r = await call("POST", "/api/ai/chat", token, body);
+    expect(r.body.proposals[0]).toMatchObject({ type: "add_meal_entry", date: "2026-10-24" });
+  });
+});
+
+describe("análisis de entrenos con IA", () => {
+  const body = { kind: "workout", data: "Entreno: Pierna. Sentadilla 3x5 a 100 kg (antes 3x5 a 97,5 kg).", goal: "ganar músculo" };
+  const analysis = { headline: "Buena sesión de pierna", highlights: ["+2,5 kg en sentadilla"], warnings: [], nextTime: ["Prueba 102,5 kg"], score: 8 };
+  afterAll(() => generateTextMock.mockReset());
+
+  it("requiere sesión y valida el tipo", async () => {
+    expect((await call("POST", "/api/ai/analyze", undefined, body)).status).toBe(401);
+    expect((await call("POST", "/api/ai/analyze", token, { ...body, kind: "futbol" })).status).toBe(400);
+  });
+
+  it("devuelve el análisis estructurado y manda el objetivo en las instrucciones", async () => {
+    generateTextMock.mockResolvedValueOnce({ text: "", toolCalls: [], output: analysis });
+    const r = await call("POST", "/api/ai/analyze", token, body);
+    expect(r.status).toBe(200);
+    expect(r.body.analysis).toEqual(analysis);
+    const args = generateTextMock.mock.calls.at(-1)?.[0];
+    expect(args.instructions).toContain("ganar músculo");
+    expect(args.prompt).toContain("Sentadilla");
+  });
+
+  it("si Gemini devuelve algo sin la forma pedida, prueba con Groq", async () => {
+    generateTextMock.mockResolvedValueOnce({ text: "", toolCalls: [], output: { headline: "x" } });
+    generateTextMock.mockResolvedValueOnce({ text: "", toolCalls: [], output: analysis });
+    const r = await call("POST", "/api/ai/analyze", token, body);
+    expect(r.status).toBe(200);
+    expect(generateTextMock.mock.calls.at(-1)?.[0].model.provider).toBe("groq");
+  });
+
+  it("si fallan los dos, 502", async () => {
+    generateTextMock.mockRejectedValueOnce(new Error("a"));
+    generateTextMock.mockRejectedValueOnce(new Error("b"));
+    expect((await call("POST", "/api/ai/analyze", token, body)).status).toBe(502);
+  });
 });
 
 describe("IA con foto (nevera y escaneo de producto)", () => {
@@ -367,8 +418,9 @@ describe("IA con foto (nevera y escaneo de producto)", () => {
     expect(r.statusCode).toBe(400);
   });
 
-  it("nevera: convierte la respuesta de texto en una lista de ingredientes", async () => {
-    generateTextMock.mockResolvedValueOnce({ text: "- Tomate\n* Pollo\n1. Arroz\n\nQueso", toolCalls: [] });
+  it("nevera: salida estructurada con posiciones (y nombres sueltos para APK antiguas)", async () => {
+    const item = { name: "Leche", category: "lacteo", zone: "door", level: 1, x: 0.2, depth: "front", confidence: 0.9, quantity: 1, unit: "l" };
+    generateTextMock.mockResolvedValueOnce({ text: "", toolCalls: [], output: { items: [item], shelvesSeen: 3, doorVisible: true } });
     const r = await app.inject({
       method: "POST",
       url: "/api/ai/vision/fridge",
@@ -376,7 +428,27 @@ describe("IA con foto (nevera y escaneo de producto)", () => {
       payload: multipartBody([["photo", "nevera.jpg", "image/jpeg", jpegBytes]]),
     });
     expect(r.statusCode).toBe(200);
-    expect(JSON.parse(r.body).items).toEqual(["Tomate", "Pollo", "Arroz", "Queso"]);
+    const body = JSON.parse(r.body);
+    expect(body.items).toEqual(["Leche"]);
+    expect(body.scan).toMatchObject({ positioned: true, shelvesSeen: 3, doorVisible: true, items: [item] });
+  });
+
+  it("nevera: si la salida estructurada no vale, plan B en texto sin preámbulos", async () => {
+    // Gemini y Groq devuelven objetos con forma inválida; luego el texto de Gemini.
+    generateTextMock.mockResolvedValueOnce({ text: "", toolCalls: [], output: { items: [{ name: "x", zone: "techo" }] } });
+    generateTextMock.mockResolvedValueOnce({ text: "", toolCalls: [], output: null });
+    generateTextMock.mockResolvedValueOnce({ text: "Aquí tienes lo que veo:\n- Tomate\n* Pollo\n1. Arroz\n\nQueso", toolCalls: [] });
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/ai/vision/fridge",
+      headers: { authorization: `Bearer ${token}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipartBody([["photo", "nevera.jpg", "image/jpeg", jpegBytes]]),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = JSON.parse(r.body);
+    expect(body.items).toEqual(["Tomate", "Pollo", "Arroz", "Queso"]);
+    expect(body.scan.positioned).toBe(false);
+    expect(body.scan.items).toHaveLength(4);
   });
 
   it("producto: acepta solo la foto delantera y traduce la tool call a una propuesta", async () => {
@@ -446,21 +518,44 @@ describe("IA con foto (nevera y escaneo de producto)", () => {
     expect(JSON.parse(r.body).message).toMatch(/pesa demasiado/);
   });
 
-  it("si Gemini falla, 503 y el log no lleva la foto", async () => {
-    const err = Object.assign(new Error("modelo retirado"), { statusCode: 404, requestBodyValues: { contents: "BASE64FOTO" } });
-    generateTextMock.mockRejectedValueOnce(err);
+  it("si Gemini falla, responde el modelo de visión de Groq", async () => {
+    generateTextMock.mockRejectedValueOnce(Object.assign(new Error("API key not valid"), { statusCode: 401 }));
+    // Groq no admite la salida estructurada con fotos: devuelve el JSON en el texto, «casi bien».
+    generateTextMock.mockResolvedValueOnce({
+      text: 'Claro: {"items":[{"name":"Leche","category":"dairy","zone":"main","level":1.4,"x":3,"depth":"front"}],"shelvesSeen":2,"doorVisible":true}',
+      toolCalls: [],
+    });
     const r = await app.inject({
       method: "POST",
       url: "/api/ai/vision/fridge",
       headers: { authorization: `Bearer ${token}`, "content-type": `multipart/form-data; boundary=${boundary}` },
       payload: multipartBody([["photo", "nevera.jpg", "image/jpeg", jpegBytes]]),
     });
+    expect(r.statusCode).toBe(200);
+    const body = JSON.parse(r.body);
+    expect(body.items).toEqual(["Leche"]);
+    expect(body.scan.items[0]).toMatchObject({ category: "otros", zone: "shelf", level: 1, x: 1, confidence: 0.6 });
+    expect(generateTextMock.mock.calls.at(-1)?.[0].model.provider).toBe("groq");
+    expect(generateTextMock.mock.calls.at(-1)?.[0].output).toBeUndefined();
+    expect(generateTextMock.mock.calls.at(-1)?.[0].model.modelId).toBe("qwen/qwen3.8-27b");
+  });
+
+  it("si fallan Gemini y Groq, 503 y el log no lleva la foto", async () => {
+    const err = Object.assign(new Error("modelo retirado"), { statusCode: 404, requestBodyValues: { contents: "BASE64FOTO" } });
+    generateTextMock.mockRejectedValue(err);
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/ai/vision/fridge",
+      headers: { authorization: `Bearer ${token}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipartBody([["photo", "nevera.jpg", "image/jpeg", jpegBytes]]),
+    });
+    generateTextMock.mockReset();
     expect(r.statusCode).toBe(503);
     expect(JSON.stringify(logSafeError(err))).not.toContain("BASE64FOTO");
     expect(logSafeError(err)).toMatchObject({ message: "modelo retirado", statusCode: 404 });
   });
 
-  it("sin GEMINI_API_KEY, 503 (no confunde «no configurado» con un fallo de red)", async () => {
+  it("sin ninguna clave de IA, 503 (no confunde «no configurado» con un fallo de red)", async () => {
     const noKeyApp = await buildApp({ dbPath: ":memory:", mediaDir: "/tmp/cheluisfit-test-media-noai2", version: "test", setupCode: "x", allowedOrigins: [], logLevel: "silent" });
     const reg = await noKeyApp.inject({ method: "POST", url: "/api/auth/register", payload: { name: "A", email: "b@b.es", password: "12345678", setupCode: "x" } });
     const r = await noKeyApp.inject({

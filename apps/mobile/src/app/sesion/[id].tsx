@@ -1,3 +1,5 @@
+import { AnalysisCard } from "@/components/ai/AnalysisCard";
+import { runAnalysisData } from "@/domain/analysis";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
@@ -9,7 +11,7 @@ import { toast } from "@/components/ui/Toast";
 import { fetchExerciseRoute } from "@/data/healthConnect";
 import { useRunning } from "@/data/runningStore";
 import { useNutrition } from "@/data/store";
-import { dayLabel, fromDateKey } from "@/domain/dates";
+import { addDays, dayLabel, fromDateKey, todayKey } from "@/domain/dates";
 import { fmtDuration, fmtKm, fmtPace } from "@/domain/format";
 import { type Activity, avgPace, defaultMaxHr, hrZoneOf, planVsActual, STEP_LABEL, type StepKind } from "@/domain/running";
 import { useBreakpoint, useTheme } from "@/theme/ThemeProvider";
@@ -98,6 +100,16 @@ export default function SessionScreen() {
           {activity.ascentM !== undefined ? <Stat label="Desnivel +" value={String(activity.ascentM)} unit="m" /> : null}
           {activity.kcal ? <Stat label="Calorías" value={String(activity.kcal)} unit="kcal" /> : null}
         </StatGrid>
+
+        <AnalysisCard
+          kind="run"
+          analysisKey={activity.id}
+          // Solo las recientes se analizan solas al abrirlas: repasar el historial no gasta IA.
+          auto={activity.date >= addDays(todayKey(), -3)}
+          stored={activity.analysis}
+          data={() => runAnalysisData(activity, useRunning.getState().activities, maxHr)}
+          onSave={(analysis) => update(activity.id, { analysis })}
+        />
 
         {(() => {
           const planInfo = (

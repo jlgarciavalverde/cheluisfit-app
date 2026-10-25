@@ -1,3 +1,5 @@
+import { AnalysisCard } from "@/components/ai/AnalysisCard";
+import { workoutAnalysisData } from "@/domain/analysis";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
@@ -127,6 +129,16 @@ export default function WorkoutDetailScreen() {
             </View>
           </View>
         </Card>
+        <AnalysisCard
+          kind="workout"
+          analysisKey={workout.id}
+          stored={workout.analysis}
+          data={() => workoutAnalysisData(workout, useStrength.getState().workouts, effortMode)}
+          onSave={(analysis) => {
+            const cur = useStrength.getState().workouts.find((w) => w.id === workout.id);
+            if (cur) updateWorkout({ ...cur, analysis });
+          }}
+        />
         <Text variant="caption" color="faint">
           Toca una serie para corregirla.
         </Text>

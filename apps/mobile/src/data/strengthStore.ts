@@ -1,3 +1,4 @@
+import type { StoredAnalysis } from "@/domain/analysis";
 import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -35,6 +36,9 @@ export interface StrengthState {
   duplicateRoutine: (id: string) => Routine | undefined;
   addWorkout: (w: Workout) => void;
   updateWorkout: (w: Workout) => void;
+  /** Análisis semanal de la IA por lunes de la semana (`weekKey`); se sincroniza con los entrenos. */
+  weekAnalyses: Record<string, StoredAnalysis>;
+  setWeekAnalysis: (week: string, a: StoredAnalysis) => void;
   deleteWorkout: (id: string) => Workout | undefined;
   restoreWorkout: (w: Workout) => void;
   saveCustomExercise: (e: Exercise) => void;
@@ -47,6 +51,7 @@ export interface StrengthState {
 }
 
 const empty = () => ({
+  weekAnalyses: {} as Record<string, StoredAnalysis>,
   routines: [] as Routine[],
   workouts: [] as Workout[],
   custom: [] as Exercise[],
@@ -57,6 +62,7 @@ const empty = () => ({
 });
 
 const initial = () => ({
+  weekAnalyses: {} as Record<string, StoredAnalysis>,
   routines: SEED_ROUTINES,
   workouts: seedWorkouts(todayKey()),
   custom: [] as Exercise[],
@@ -95,6 +101,12 @@ export const useStrength = create<StrengthState>()(
       },
       addWorkout: (w) => set((s) => ({ workouts: [w, ...s.workouts.filter((x) => x.id !== w.id)] })),
       updateWorkout: (w) => set((s) => ({ workouts: s.workouts.map((x) => (x.id === w.id ? w : x)) })),
+      setWeekAnalysis: (week, a) =>
+        set((s) => {
+          // Solo las 12 últimas semanas: es un resumen, no un histórico que deba crecer sin fin.
+          const next = Object.fromEntries(Object.entries({ ...s.weekAnalyses, [week]: a }).sort((x, y) => y[0].localeCompare(x[0])).slice(0, 12));
+          return { weekAnalyses: next };
+        }),
       deleteWorkout: (id) => {
         const found = get().workouts.find((w) => w.id === id);
         if (found) set((s) => ({ workouts: s.workouts.filter((w) => w.id !== id) }));
@@ -119,8 +131,9 @@ export const useStrength = create<StrengthState>()(
       name: "cf_strength_v1",
       storage: guardedJSONStorage(),
       onRehydrateStorage: guardRehydrate("cf_strength_v1"),
-      version: 1,
+      version: 2,
       // Campos nuevos desde `empty()`, nunca desde `initial()` (metería rutinas de ejemplo).
+      // v1 → v2: llega `weekAnalyses` (informe semanal de la IA).
       migrate: (persisted) => ({ ...empty(), ...(persisted as object) }) as StrengthState,
     },
   ),

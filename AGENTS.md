@@ -78,8 +78,36 @@ el modelo como sobre qué actividad/entreno se aplicaría un `add_note`. El cont
 al modelo es un resumen compacto por sección (`domain/aiContext.ts`: `nutritionContext`/
 `runningContext`/`strengthContext`, apoyados en los mismos cálculos que ya usan las pantallas:
 `weekSummary`, `weeklyTotals`, `workoutTotals`…) — nunca el histórico entero, por el límite de
-tokens/minuto de los planes gratuitos. La conversación del panel es solo en memoria (no se
-guarda ni se sincroniza) — cerrar el panel la borra.
+tokens/minuto de los planes gratuitos. La conversación es solo en memoria (no se guarda ni se
+sincroniza), pero **desde la 0.18 no se borra al cerrar el panel**: vive en
+`data/aiPanelStore.ts` (una por sección, botón «Nueva conversación»), que también permite abrir
+el panel desde otra pantalla con una pregunta ya escrita (`openPanel(prompt)`, «¿Qué cocino?»).
+**Contexto desde la 0.18** (`buildContext` en `AiAssistant.tsx`): `profileContext()` (fecha de
+hoy, sexo, edad, altura, peso y su tendencia, objetivo, FC máx.) va siempre delante; «general»
+(Hoy, Más…) ya no va vacío (`generalContext()`: hoy, últimos 7 días, racha, próximo plan); fuerza
+lleva la mejor serie, 1RM estimado, RIR medio y récords de cada ejercicio; running, FC/zona,
+desnivel, esfuerzo y próximas sesiones. `budgetContext()` junta las partes por prioridad sin
+pasar de 5.500 caracteres, y el servidor recorta a 6.000 en vez de devolver 400. Si la pantalla
+es una sesión o un entreno (`screenTarget()`), el contexto lo dice y `add_note` va a **esa**
+sesión, no a la última. `add_meal_entry` admite `date` (nunca futura). Errores con «Reintentar»,
+indicador de «escribiendo», sugerencias por pantalla. El prompt común prohíbe inventar datos y
+pide prudencia en temas médicos.
+
+**Análisis de entrenos con IA** (0.18, `POST /api/ai/analyze`, `domain/analysis.ts`,
+`components/ai/AnalysisCard.tsx`): **los números los calcula el móvil**
+(`workoutAnalysisData` — sesión anterior de la rutina, series de hoy y anteriores, evolución del
+1RM, descansos, sugerencia de `suggestNext`, récords, series por músculo —; `runAnalysisData` —
+ritmo, FC y zona, vueltas y su regularidad, plan, km de las 5 semanas, sesiones parecidas,
+récords —; `weekAnalysisData`), y el modelo solo los interpreta con salida estructurada
+(`AnalysisSchema`: `headline`, `highlights`, `warnings`, `nextTime`, `score`), Gemini con Groq de
+respaldo (`withFallback()` de `routes/ai.ts`, compartido con el chat). El resultado se guarda con
+la sesión (`Workout.analysis`, `Activity.analysis`, `useStrength().weekAnalyses` por lunes, las
+12 últimas) y se sincroniza con ella; no se vuelve a pedir salvo «Volver a analizar». Automático
+solo en el resumen al terminar un entreno y al abrir una carrera de los 3 últimos días (una vez
+por sesión de uso, `autoTried`); en el detalle y el informe, con botón. Sin sesión la tarjeta no
+se pinta. **Informe semanal** (`informe.tsx`, enlazado desde Hoy y Más): series por grupo
+muscular, minutos por zona de pulso (aproximados con la FC media de cada sesión) y el análisis de
+la semana.
 
 **IA con foto** (`routes/aiVision.ts`, `server/src/vision.ts`): dos endpoints aparte de
 `/api/ai/chat` — `POST /api/ai/vision/fridge` (Nevera) y `POST /api/ai/vision/product` (escanear
@@ -126,13 +154,35 @@ invisible en los logs hasta depurarlo a mano (2026-09-24). El defecto ahora es
 `gemini-3.5-flash-lite` y el `catch` deja el error real en el log del contenedor. Ante un 503
 de visión, mirar primero `docker logs cheluisfit | grep vision` y luego si el modelo sigue vivo.
 
-Nevera (`nevera.tsx`) es solo lectura de contexto, sin *tool calling* (una lista de líneas de
-texto es más simple que forzar una `tool` para eso): la lista de ingredientes vive en
-`useNutrition().fridge` (mismo blob `cf_nutrition_v1`, sin tocar el servidor) y
-`domain/aiContext.ts`'s `nutritionContext()` la añade al contexto del asistente normal si hay
-algo escaneado — así "más contexto para sugerir qué cocinar" no necesita ninguna función de
-lista de la compra dentro de CheluisFIT (esa existe en la otra app del usuario, Compra en
-Familia, repo distinto — fuera de alcance aquí a propósito).
+**Nevera** (`nevera.tsx`, `domain/fridge.ts`, `components/fridge/`, desde la 0.17): la IA ya no
+devuelve una lista de nombres sino **cada alimento con su sitio** — salida estructurada de Gemini
+(`callVisionObject()` en `vision.ts` = `generateText` + `Output.object` con un esquema Zod):
+`{name, category, quantity?, unit?, zone: shelf|drawer|door|freezer, level (0 = arriba), x (0–1),
+depth, confidence, expiresHint?}` + `shelvesSeen`/`doorVisible`. Si la salida estructurada falla,
+plan B en texto (`parseIngredientLines`, que ahora descarta preámbulos) y `positioned: false`. La
+respuesta lleva también `items: string[]` (nombres) para las APK ≤ 0.16, que solo leen eso.
+En el móvil, `useNutrition().fridge` es `{items: FridgeItem[], layout, lastScannedAt}` (migración
+v7 con `migrateFridge`, idempotente). Al escanear con algo ya guardado se pregunta si la foto es
+**toda la nevera** (`replace`) o **una parte** (`add`, se fusiona por nombre normalizado con
+`itemKey()` conservando id, nombre y categoría editados a mano). Los que llegan sin sitio los
+coloca `autoPlace()` por categoría (bebidas/salsas/huevos → puerta, fruta/verdura → cajón). Se
+puede añadir y corregir a mano (`FridgeItemSheet`). `fridgeContext()` resume por sitios (≤ 700
+caracteres) para el asistente; `/nevera` cuenta como sección de nutrición, y «¿Qué cocino?» abre
+el asistente (`data/aiPanelStore.ts`, `openPanel(prompt)`) con lo que queda de kcal y proteína hoy.
+Sigue sin haber lista de la compra dentro de CheluisFIT (existe en Compra en Familia, otro repo).
+**Vista 3D** (`Fridge3D.tsx` + `FridgeScene.tsx`): `three` + `@react-three/fiber` + `expo-gl`,
+solo primitivas (sin GLB). `FridgeCanvas.tsx` (web, `@react-three/fiber`) y
+`FridgeCanvas.native.tsx` (`@react-three/fiber/native`) exportan `Canvas` **y** los hooks, para que
+compartan la misma copia del renderizador. Geometría compartida en `domain/fridge.ts`
+(`FRIDGE_DIMS`, `itemPosition`, `shelfHeights`; los alimentos de la puerta van en coordenadas de
+la puerta, que gira sobre su bisagra). Colores en `fridgeScene` de `tokens.ts` (Three necesita
+literales). Se carga con `React.lazy` desde `nevera.tsx`. **Trampa**: three ≥ 0.18x es solo ESM y
+su `three.cjs` llama a `process.emitWarning`, que no existe en React Native — la APK se cerraba
+al abrir el 3D (en la web no pasa). `metro.config.js` fuerza `three.module.js`. Un error al
+**cargar** un módulo diferido es fatal en release (Metro lo reporta antes que cualquier
+ErrorBoundary): probar el 3D en la APK, no solo en la web. Para leer un cierre de la APK:
+`adb logcat -d | grep AndroidRuntime` y simbolizar con `metro-symbolicate` contra
+`android/app/build/generated/sourcemaps/react/release/index.android.bundle.map`.
 
 **TDEE adaptativo** (`domain/tdee.ts`, puro, sin acceso a la tienda): en vez de un % de ajuste
 fijo por objetivo (`GOAL_ADJUST` en `domain/nutrition.ts`), corrige el objetivo poco a poco según

@@ -41,7 +41,22 @@ export const AiChatInput = z.object({
     )
     .refine((ms) => ms.length > 0, "Escribe un mensaje"),
   // Resumen compacto que construye el móvil (`domain/aiContext.ts`), nunca el histórico entero.
-  context: z.string().max(4000),
+  // Si se pasa (APK antigua, nevera enorme), se recorta en vez de romper el chat con un 400.
+  context: z
+    .string()
+    .max(50_000)
+    .transform((s) => s.slice(0, 6000)),
+});
+
+export const AiAnalyzeInput = z.object({
+  kind: z.enum(["workout", "run", "week"]),
+  // Texto con los datos ya calculados por el móvil (`domain/analysis.ts`).
+  data: z
+    .string()
+    .min(1)
+    .max(50_000)
+    .transform((s) => s.slice(0, 8000)),
+  goal: z.string().max(200).optional(),
 });
 
 const USERNAME_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])?$/;

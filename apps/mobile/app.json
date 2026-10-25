@@ -3,14 +3,14 @@
     "name": "CheluisFIT",
     "slug": "cheluisfit",
     "scheme": "cheluisfit",
-    "version": "0.16.1",
+    "version": "0.18.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0F0E0D",
     "android": {
       "package": "com.redgarverde.cheluisfit",
-      "versionCode": 1601,
+      "versionCode": 1800,
       "adaptiveIcon": {
         "backgroundColor": "#0F0E0D",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -70,7 +70,8 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 26
+            "minSdkVersion": 26,
+            "extraProguardRules": "# expo-gl (Nevera 3D): R8 quitaba el constructor de GLView y la APK se cerraba al abrir el 3D.\n-keep class expo.modules.gl.** { *; }\n"
           }
         }
       ],

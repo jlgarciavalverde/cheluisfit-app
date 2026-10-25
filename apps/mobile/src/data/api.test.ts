@@ -44,7 +44,9 @@ describe("api", () => {
   it("la IA con foto reintenta una vez un fallo de red, pero no un timeout", async () => {
     fetchMock.mockRejectedValueOnce(new TypeError("Network request failed"));
     fetchMock.mockResolvedValueOnce(res(200, JSON.stringify({ items: ["Leche"] })));
-    expect(await api.aiFridgeScan("t", "file://x.jpg")).toEqual({ items: ["Leche"] });
+    const r = await api.aiFridgeScan("t", "file://x.jpg");
+    expect(r.items).toEqual(["Leche"]);
+    expect(r.scan).toMatchObject({ positioned: false, items: [{ name: "Leche" }] }); // servidor anterior a la 0.17
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     fetchMock.mockReset();

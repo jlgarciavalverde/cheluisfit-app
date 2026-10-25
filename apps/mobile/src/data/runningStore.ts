@@ -34,7 +34,7 @@ export interface RunningState {
   planTemplate: (templateId: string, date: string) => string;
   unplan: (id: string) => Planned | undefined;
   restorePlanned: (p: Planned) => void;
-  updateActivity: (id: string, patch: Partial<Pick<Activity, "notes" | "rpe" | "title" | "templateId" | "route">>) => void;
+  updateActivity: (id: string, patch: Partial<Pick<Activity, "notes" | "rpe" | "title" | "templateId" | "route" | "analysis">>) => void;
   duplicateTemplate: (id: string) => Template | undefined;
   addActivity: (a: Omit<Activity, "id">) => string;
   deleteActivity: (id: string) => Activity | undefined;

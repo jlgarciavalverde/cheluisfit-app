@@ -1,16 +1,28 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText, type ModelMessage } from "ai";
+import { createGroq } from "@ai-sdk/groq";
+import { generateText, Output, type ModelMessage } from "ai";
+import type { z } from "zod";
 import type { FastifyBaseLogger, FastifyRequest } from "fastify";
 import { HttpError, logSafeError } from "./http";
 import type { AppConfig } from "./routes/ctx";
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+/** Respaldo con visión en Groq (desde la 0.18; el `GROQ_MODEL` del chat no ve fotos). */
+export const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
 
 const UNAVAILABLE = "La IA con foto no está disponible ahora mismo";
 
 /** Antes de leer nada: sin clave no tiene sentido recibir hasta 16 MB de fotos para nada. */
 export function requireVisionKey(cfg: AppConfig): void {
-  if (!cfg.geminiApiKey) throw new HttpError(503, UNAVAILABLE);
+  if (!cfg.geminiApiKey && !cfg.groqApiKey) throw new HttpError(503, UNAVAILABLE);
+}
+
+/** Modelos con visión por orden: Gemini y, si falla o no hay clave, el de visión de Groq. */
+function visionModels(cfg: AppConfig) {
+  const out = [];
+  if (cfg.geminiApiKey) out.push({ name: "Gemini", model: createGoogleGenerativeAI({ apiKey: cfg.geminiApiKey })(GEMINI_MODEL) });
+  if (cfg.groqApiKey) out.push({ name: "Groq", model: createGroq({ apiKey: cfg.groqApiKey })(GROQ_VISION_MODEL) });
+  return out;
 }
 
 const ALLOWED_IMAGE = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -60,9 +72,9 @@ export async function readImages(req: FastifyRequest, required: string[], option
 }
 
 /**
- * Llamada de IA con imágenes. Solo Gemini: el modelo de respaldo de Groq (`GROQ_MODEL`, ver
- * `routes/ai.ts`) no tiene visión, así que aquí no hay reintento — mejor un 503 claro que un
- * intento silencioso contra un modelo que no puede ver la foto.
+ * Llamada de IA con imágenes: Gemini y, si falla, `GROQ_VISION_MODEL` (un modelo de Groq que sí
+ * ve fotos; el `GROQ_MODEL` del chat no). Desde la 0.18 — antes era solo Gemini y una clave de
+ * Gemini caducada dejaba la Nevera y el escaneo por foto sin funcionar. 503 si fallan los dos.
  */
 export async function callVision(
   cfg: AppConfig,
@@ -81,17 +93,65 @@ export async function callVision(
     },
   ];
 
-  try {
-    const google = createGoogleGenerativeAI({ apiKey: cfg.geminiApiKey });
-    const result = await generateText({ model: google(GEMINI_MODEL), instructions, messages, tools });
-    return { reply: result.text, toolCalls: result.toolCalls };
-  } catch (e) {
-    // El 503 es claro para quien usa la app, pero el motivo real (p. ej. un modelo retirado por
-    // Google, como le pasó a gemini-2.5-flash-lite) tiene que quedar en el log del servidor:
-    // sin esta línea el fallo era indistinguible de «falta la clave» sin depurar a mano.
-    // Solo el resumen (`logSafeError`): el error del SDK lleva la foto en base64 dentro.
-    if (log) log.error({ err: logSafeError(e) }, "[vision] la llamada a Gemini falló");
-    else console.error("[vision] la llamada a Gemini falló:", logSafeError(e));
-    throw new HttpError(503, UNAVAILABLE);
+  for (const { name, model } of visionModels(cfg)) {
+    try {
+      const result = await generateText({ model, instructions, messages, tools });
+      return { reply: result.text, toolCalls: result.toolCalls };
+    } catch (e) {
+      // El motivo real (clave caducada, modelo retirado por Google…) tiene que quedar en el log:
+      // sin esto el fallo era indistinguible de «falta la clave». Solo el resumen
+      // (`logSafeError`): el error del SDK lleva la foto en base64 dentro.
+      if (log) log.error({ err: logSafeError(e) }, `[vision] la llamada a ${name} falló`);
+      else console.error(`[vision] la llamada a ${name} falló:`, logSafeError(e));
+    }
   }
+  throw new HttpError(503, UNAVAILABLE);
+}
+
+/**
+ * Igual que `callVision`, pero pidiendo un objeto que cumpla `schema`. Gemini usa su salida
+ * estructurada (`Output.object`); el modelo de visión de Groq no la admite con fotos («Generated
+ * JSON does not match the expected schema», comprobado en producción), así que a él se le pide el
+ * JSON en el texto con un ejemplo y se pasa por `coerce` (que arregla zonas/categorías que no
+ * existen, nombres en inglés no, eso no) antes de validarlo. `null` si ninguno da algo válido.
+ */
+export async function callVisionObject<S extends z.ZodType>(
+  cfg: AppConfig,
+  instructions: string,
+  images: ImagePart[],
+  text: string,
+  schema: S,
+  log?: FastifyBaseLogger,
+  json?: { example: unknown; coerce: (raw: unknown) => unknown },
+): Promise<z.infer<S> | null> {
+  requireVisionKey(cfg);
+  const messages: ModelMessage[] = [
+    {
+      role: "user",
+      content: [{ type: "text", text }, ...images.map((img) => ({ type: "image" as const, image: img.buffer, mediaType: img.mediaType }))],
+    },
+  ];
+  for (const { name, model } of visionModels(cfg)) {
+    try {
+      let raw: unknown;
+      if (name === "Gemini" || !json) {
+        raw = (await generateText({ model, instructions, messages, output: Output.object({ schema }) })).output;
+      } else {
+        const r = await generateText({
+          model,
+          instructions: `${instructions}\n\nResponde SOLO con un objeto JSON, sin texto alrededor, con esta forma (ejemplo): ${JSON.stringify(json.example)}`,
+          messages,
+        });
+        const m = r.text.match(/\{[\s\S]*\}/);
+        raw = m ? json.coerce(JSON.parse(m[0])) : null;
+      }
+      const parsed = schema.safeParse(raw);
+      if (parsed.success) return parsed.data;
+      if (log) log.warn(`[vision] ${name} devolvió un objeto con forma inválida`);
+    } catch (e) {
+      if (log) log.warn({ err: logSafeError(e) }, `[vision] la salida estructurada de ${name} falló`);
+      else console.warn(`[vision] la salida estructurada de ${name} falló:`, logSafeError(e));
+    }
+  }
+  return null;
 }

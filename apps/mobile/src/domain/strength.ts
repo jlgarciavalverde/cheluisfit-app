@@ -1,5 +1,6 @@
 // Dominio de fuerza (gimnasio): ejercicios, rutinas, entrenos, series, sobrecarga
 // progresiva, récords, descanso, superseries y calculadoras. Puro (sin React Native).
+import type { StoredAnalysis } from "./analysis";
 import { fmtKg, fmtNum } from "./format";
 import { makeId, moveItem } from "./running";
 
@@ -357,6 +358,8 @@ export interface Workout {
   notes?: string;
   /** Cambios respecto a la rutina de origen (calculados al terminar, antes de descartar lo no hecho). */
   routineUpdate?: RoutineUpdate;
+  /** Análisis de la IA (`domain/analysis.ts`), guardado para no volver a pedirlo. */
+  analysis?: StoredAnalysis;
 }
 
 export function plannedSets(warmups: number, working: number, repMin: number, repMax: number): PlannedSet[] {

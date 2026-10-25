@@ -1,3 +1,4 @@
+import { weekKey } from "@/domain/analysis";
 import { router } from "expo-router";
 import { useMemo } from "react";
 import { View } from "react-native";
@@ -42,6 +43,7 @@ export default function HoyScreen() {
   const today = todayKey();
   const routines = useStrength((s) => s.routines);
   const gymWorkouts = useStrength((s) => s.workouts);
+  const weekAnalysis = useStrength((s) => s.weekAnalyses[weekKey(todayKey())]);
   const library = useLibrary();
   const activeWorkout = useActiveWorkout((s) => s.workout);
   const startWorkout = useActiveWorkout((s) => s.start);
@@ -194,6 +196,15 @@ export default function HoyScreen() {
           <Button label="Crear una rutina" icon="add" variant="secondary" size="sm" onPress={() => router.navigate("/fuerza")} />
         )}
       </Card>
+      <PressableCard accessibilityLabel="Informe semanal" testID="hoy-informe" onPress={() => router.push("/informe")} style={{ gap: space.sm }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <Icon name="sparkles-outline" size="sm" color="brandText" />
+          <Overline color="muted">Informe semanal</Overline>
+        </View>
+        <Text variant="body" numberOfLines={2}>
+          {weekAnalysis ? weekAnalysis.result.headline : "Cómo va tu semana en fuerza, running y comida, con el análisis de la IA."}
+        </Text>
+      </PressableCard>
       <Callout icon="football-outline" title="Fútbol" dense>
         Llegará en una próxima fase del diseño.
       </Callout>

@@ -1,3 +1,5 @@
+import { AnalysisCard } from "@/components/ai/AnalysisCard";
+import { workoutAnalysisData } from "@/domain/analysis";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
@@ -120,6 +122,17 @@ export default function WorkoutSummaryScreen() {
           </Callout>
         ) : null}
 
+        <AnalysisCard
+          kind="workout"
+          analysisKey={workout.id}
+          auto
+          stored={workout.analysis}
+          data={() => workoutAnalysisData(workout, useStrength.getState().workouts, effortMode)}
+          onSave={(analysis) => {
+            const cur = useStrength.getState().workouts.find((w) => w.id === workout.id);
+            if (cur) useStrength.getState().updateWorkout({ ...cur, analysis });
+          }}
+        />
         <WorkoutSets workout={workout} effortMode={effortMode} prs={prMap} />
         <Button label="Ver en el historial" variant="ghost" onPress={() => router.replace({ pathname: "/entreno/detalle/[id]", params: { id: workout.id } })} />
       </View>

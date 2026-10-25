@@ -17,6 +17,7 @@ const ROUTES = [
   "/peso",
   "/medidas",
   "/nevera",
+  "/informe",
   "/escaner-foto",
   "/sesion/nueva",
   "/fuerza",

@@ -39,7 +39,7 @@ export function useAutoSync() {
 
   useEffect(() => {
     if (token) trigger(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [token]);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export function useAutoSync() {
       else if (state === "background") trigger(true);
     });
     return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   useEffect(() => {
@@ -63,6 +63,6 @@ export function useAutoSync() {
       subs.forEach((unsub) => unsub());
       if (pending.current) clearTimeout(pending.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 }

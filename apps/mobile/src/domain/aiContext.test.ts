@@ -1,3 +1,4 @@
+import { EMPTY_FRIDGE, migrateFridge } from "./fridge";
 import { describe, expect, it } from "vitest";
 import { foodFromMealProposal, nutritionContext, runningContext, sectionForPath, strengthContext } from "./aiContext";
 import { addDays } from "./dates";
@@ -30,12 +31,15 @@ describe("nutritionContext", () => {
   });
 
   it("añade el contenido de la nevera si se ha escaneado", () => {
-    const text = nutritionContext(profile, targets, [], TODAY, { items: ["tomate", "pollo"], lastScannedAt: addDays(TODAY, -2) });
-    expect(text).toContain("En la nevera (escaneada hace 2 días): tomate, pollo.");
+    const fridge = migrateFridge({ items: ["Tomate", "Pollo"], lastScannedAt: `${addDays(TODAY, -2)}T10:00:00.000Z` });
+    const text = nutritionContext(profile, targets, [], TODAY, fridge, new Date(`${TODAY}T12:00:00.000Z`));
+    expect(text).toContain("En la nevera (vista hace 2 días)");
+    expect(text).toContain("Tomate");
+    expect(text).toContain("Pollo");
   });
 
   it("sin nevera escaneada, no añade nada sobre ella", () => {
-    const text = nutritionContext(profile, targets, [], TODAY, { items: [], lastScannedAt: null });
+    const text = nutritionContext(profile, targets, [], TODAY, EMPTY_FRIDGE);
     expect(text).not.toContain("nevera");
   });
 });

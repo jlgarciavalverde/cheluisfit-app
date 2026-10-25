@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { checkTdeeAdjustment, hasEnoughTdeeData, targetsFor, TDEE_CHECK_EVERY_DAYS, type TdeeProposal } from "@/domain/tdee";
 import type { Entry, Food, MealSlot, MeasurementEntry, MeasurementKind, Profile, SavedMeal, Targets, WeightEntry } from "@/domain/types";
 import { normalizeWeights } from "@/domain/weight";
+import { autoPlace, EMPTY_FRIDGE, mergeScan, migrateFridge, type Fridge, type FridgeItem, type FridgeScan } from "@/domain/fridge";
 import { setMealReminder } from "@/lib/reminders";
 import { SEED_PROFILE, seedEntries, seedWeights } from "./seed";
 
@@ -27,8 +28,8 @@ export interface NutritionState {
   sumExerciseKcal: boolean;
   /** Aviso diario a las 21:00 si no se ha registrado nada (`lib/reminders.ts`). */
   remindMeals: boolean;
-  /** Última lectura de la nevera por IA (`nevera.tsx`) — solo texto, la foto nunca se guarda. */
-  fridge: { items: string[]; lastScannedAt: string | null };
+  /** Nevera (`nevera.tsx`, `domain/fridge.ts`): alimentos con su sitio — la foto nunca se guarda. */
+  fridge: Fridge;
   /** TDEE adaptativo (`domain/tdee.ts`): corrección aprendida sobre el % fijo del objetivo.
    *  Separado de `targetsOverride` a propósito — un objetivo a mano pausa este motor, no compite
    *  con él (ver `checkTdee()`). */
@@ -62,7 +63,11 @@ export interface NutritionState {
   setTargetsOverride: (t: Targets | null) => void;
   setSumExerciseKcal: (v: boolean) => void;
   setRemindMeals: (v: boolean) => void;
-  setFridgeContents: (items: string[]) => void;
+  /** Añade una foto escaneada: `replace` deja solo lo de la foto, `add` lo suma a lo que había. */
+  applyFridgeScan: (scan: FridgeScan, mode: "replace" | "add") => void;
+  upsertFridgeItem: (item: FridgeItem) => void;
+  removeFridgeItem: (id: string) => FridgeItem | undefined;
+  setFridge: (fridge: Fridge) => void;
   clearFridge: () => void;
   setTdeeEnabled: (enabled: boolean) => void;
   /** Revisa si toca proponer un ajuste (cadencia semanal, ver `checkTdeeAdjustment`); no hace
@@ -94,7 +99,7 @@ const empty = () => ({
   measurements: [] as MeasurementEntry[],
   sumExerciseKcal: false,
   remindMeals: false,
-  fridge: { items: [] as string[], lastScannedAt: null as string | null },
+  fridge: EMPTY_FRIDGE,
   tdee: { kcalAdjustment: 0, enabled: true, lastCheckedAt: null as string | null, pending: null as TdeeProposal | null },
 });
 
@@ -110,7 +115,7 @@ const initial = () => ({
   measurements: [] as MeasurementEntry[],
   sumExerciseKcal: false,
   remindMeals: false,
-  fridge: { items: [] as string[], lastScannedAt: null as string | null },
+  fridge: EMPTY_FRIDGE,
   tdee: { kcalAdjustment: 0, enabled: true, lastCheckedAt: null as string | null, pending: null as TdeeProposal | null },
 });
 
@@ -290,8 +295,20 @@ export const useNutrition = create<NutritionState>()(
         set({ remindMeals });
         setMealReminder(remindMeals).catch(() => {});
       },
-      setFridgeContents: (items) => set({ fridge: { items, lastScannedAt: todayKey() } }),
-      clearFridge: () => set({ fridge: { items: [], lastScannedAt: null } }),
+      applyFridgeScan: (scan, mode) => set((s) => ({ fridge: mergeScan(s.fridge, scan, mode) })),
+      upsertFridgeItem: (item) =>
+        set((s) => {
+          const exists = s.fridge.items.some((i) => i.id === item.id);
+          const items = exists ? s.fridge.items.map((i) => (i.id === item.id ? item : i)) : [...s.fridge.items, item];
+          return { fridge: autoPlace({ ...s.fridge, items }) };
+        }),
+      removeFridgeItem: (id) => {
+        const item = get().fridge.items.find((i) => i.id === id);
+        if (item) set((s) => ({ fridge: { ...s.fridge, items: s.fridge.items.filter((i) => i.id !== id) } }));
+        return item;
+      },
+      setFridge: (fridge) => set({ fridge }),
+      clearFridge: () => set({ fridge: EMPTY_FRIDGE }),
       setTdeeEnabled: (enabled) => set((s) => ({ tdee: { ...s.tdee, enabled } })),
       checkTdee: (exerciseKcalPerDay = 0) => {
         const s = get();
@@ -317,14 +334,18 @@ export const useNutrition = create<NutritionState>()(
     {
       name: "cf_nutrition_v1",
       storage: guardedJSONStorage(),
-      version: 6,
+      version: 7,
       // v1 → v2: llegan los pesos y las comidas guardadas. v2 → v3: llega `fridge` (Nevera).
       // v3 → v4: llega `tdee` (ajuste adaptativo). v4 → v5: llegan `measurements` (medidas
-      // corporales). v5 → v6: llega `remindMeals`. Se conserva todo lo demás — el `migrate`
+      // corporales). v5 → v6: llega `remindMeals`. v6 → v7: la nevera pasa de una lista de nombres
+      // a alimentos con sitio (`migrateFridge`, idempotente). Se conserva todo lo demás — el `migrate`
       // genérico rellena cualquier campo nuevo desde `empty()` sin listar cada versión aparte.
       // **Nunca desde `initial()`**: metería pesos o comidas de ejemplo entre los datos reales
       // (y el TDEE adaptativo los usaría como si fueran de verdad).
-      migrate: (persisted) => ({ ...empty(), ...(persisted as object) }) as NutritionState,
+      migrate: (persisted) => {
+        const p = (persisted ?? {}) as Partial<NutritionState>;
+        return { ...empty(), ...p, fridge: migrateFridge(p.fridge) } as NutritionState;
+      },
       // El aviso diario vive en el sistema, no en el blob: tras bajar los datos de la cuenta en
       // un móvil nuevo (o reinstalar), `remindMeals` puede venir activado sin nada programado.
       // Reprogramarlo al cargar es idempotente (`setMealReminder` cancela antes de crear).

@@ -2,6 +2,8 @@
 // sincronización de los blobs de cada tienda local (ver `sync.ts`). `EXPO_PUBLIC_API_URL`
 // permite apuntar a otra URL en desarrollo; en producción usa el subdominio real.
 import type { ImportedActivity } from "./healthConnect";
+import type { FridgeScan } from "@/domain/fridge";
+import type { AiAnalysis, AnalysisKind } from "@/domain/analysis";
 
 export const API_BASE = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "") || "https://cheluisfit.redgarverde.com";
 
@@ -132,7 +134,7 @@ export interface AiMessage {
 }
 /** Ver `apps/server/src/routes/ai.ts` — el servidor solo propone, nunca aplica nada solo. */
 export type AiProposal =
-  | { type: "add_meal_entry"; name: string; meal: "breakfast" | "midmorning" | "lunch" | "snack" | "dinner"; grams: number; kcal: number; protein: number; carbs: number; fat: number }
+  | { type: "add_meal_entry"; name: string; meal: "breakfast" | "midmorning" | "lunch" | "snack" | "dinner"; date?: string; grams: number; kcal: number; protein: number; carbs: number; fat: number }
   | { type: "add_note"; note: string }
   | { type: "adjust_goal"; field: "kcal" | "protein" | "carbs" | "fat"; value: number };
 
@@ -248,10 +250,21 @@ export const api = {
   },
 
   /** Ver `apps/server/src/routes/aiVision.ts`. La foto es desechable: no pasa por `/api/media`, no se guarda. */
-  async aiFridgeScan(token: string, photoUri: string): Promise<{ items: string[] }> {
+  /** Análisis de un entreno, carrera o semana (`domain/analysis.ts` prepara `data`). */
+  async aiAnalyze(token: string, kind: AnalysisKind, data: string, goal?: string): Promise<AiAnalysis> {
+    const r = await request<{ analysis: AiAnalysis }>("/api/ai/analyze", { method: "POST", token, body: { kind, data, goal }, timeoutMs: AI_CHAT_TIMEOUT_MS });
+    return r.analysis;
+  },
+
+  /** `scan` falta en servidores anteriores a la 0.17: se construye sin sitio a partir de `items`. */
+  async aiFridgeScan(token: string, photoUri: string): Promise<{ items: string[]; scan: FridgeScan }> {
     const form = new FormData();
     form.append("photo", { uri: photoUri, name: "nevera.jpg", type: "image/jpeg" } as unknown as Blob);
-    return uploadForAi("/api/ai/vision/fridge", token, form);
+    const r = await uploadForAi<{ items: string[]; scan?: FridgeScan }>("/api/ai/vision/fridge", token, form);
+    return {
+      items: r.items,
+      scan: r.scan ?? { items: r.items.map((name) => ({ name, category: "otros", zone: "shelf", level: 0, x: 0.5, depth: "front", confidence: 0.5 })), shelvesSeen: 0, doorVisible: false, positioned: false },
+    };
   },
 
   async aiProductScan(token: string, frontUri: string, backUri?: string): Promise<{ reply: string; proposals: FoodProposal[] }> {

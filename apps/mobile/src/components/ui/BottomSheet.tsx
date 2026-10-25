@@ -1,5 +1,5 @@
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeProvider";
 import { radius, space } from "@/theme/tokens";
 import { Text } from "./Text";
@@ -19,6 +19,8 @@ export function BottomSheet({
   children: React.ReactNode;
 }) {
   const { c } = useTheme();
+  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: "flex-end" }}>
@@ -40,7 +42,13 @@ export function BottomSheet({
             alignItems: "center",
           }}
         >
-          <View style={{ width: "100%", maxWidth: 560, gap: space.lg }}>
+          {/* Una hoja alta (formulario largo + teclado) se desplaza dentro en vez de salirse por arriba. */}
+          <ScrollView
+            style={{ width: "100%", maxWidth: 560, maxHeight: height - insets.top - space.xl }}
+            contentContainerStyle={{ gap: space.lg }}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
             <View style={{ width: 40, height: 4, borderRadius: radius.pill, backgroundColor: c.border, alignSelf: "center" }} />
             <View style={{ gap: 2 }}>
               <Text variant="heading" accessibilityRole="header">
@@ -53,7 +61,7 @@ export function BottomSheet({
               ) : null}
             </View>
             {children}
-          </View>
+          </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>

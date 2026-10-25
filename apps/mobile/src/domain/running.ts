@@ -1,4 +1,5 @@
 // Dominio de running: plantillas de entrenamiento, sesiones y estimaciones. Puro.
+import type { StoredAnalysis } from "./analysis";
 import { fmtPace } from "./format";
 import { compactRoute } from "./route";
 
@@ -185,6 +186,8 @@ export interface Activity {
   route?: { lat: number; lon: number }[];
   rpe?: number;
   notes?: string;
+  /** Análisis de la IA (`domain/analysis.ts`), guardado para no volver a pedirlo. */
+  analysis?: StoredAnalysis;
 }
 
 /** Texto de la fuente de una actividad — el icono queda en cada pantalla (evita importar tipos de UI en el dominio). */

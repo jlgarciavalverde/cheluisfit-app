@@ -113,6 +113,7 @@ export default function MasScreen() {
         <ListGroup>
           <ListRow icon="person-circle-outline" title={name || user?.name || "Tu perfil"} subtitle="Datos personales y objetivo de nutrición" chevron onPress={() => router.push("/objetivo")} />
           <ListRow icon="scale-outline" title="Peso corporal" subtitle="Registro y evolución" chevron onPress={() => router.push("/peso")} />
+          <ListRow icon="stats-chart-outline" title="Informe semanal" subtitle="Tu semana con el análisis de la IA" chevron onPress={() => router.push("/informe")} testID="go-informe" />
         </ListGroup>
 
         <Section kind="overline" title="Cuenta" gap={space.sm}>

@@ -7,6 +7,7 @@ import { radius, space } from "@/theme/tokens";
 import { haptic } from "./ui/haptics";
 import { Icon, type IconName } from "./ui/Icon";
 import { Text } from "./ui/Text";
+import { useNotifications } from "@/data/notificationsStore";
 
 /** Props que recibe la barra personalizada de `Tabs` (el tipo no se exporta directamente). */
 export type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>["tabBar"]>>[0];
@@ -28,6 +29,7 @@ export const TAB_META: Record<string, { label: string; icon: IconName; active: I
 export function AppTabBar({ state, navigation }: TabBarProps) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
+  const unread = useNotifications((s) => s.unread);
 
   const items = state.routes.map((route, index) => {
     const meta = TAB_META[route.name];
@@ -44,7 +46,7 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
         testID={`tab-${route.name}`}
         accessibilityRole="tab"
         accessibilityState={{ selected: focused }}
-        accessibilityLabel={meta.label}
+        accessibilityLabel={route.name === "social" && unread > 0 ? `${meta.label}, ${unread} ${unread === 1 ? "aviso nuevo" : "avisos nuevos"}` : meta.label}
         onPress={go}
         style={{ flex: 1, alignItems: "center", justifyContent: "center", minHeight: 56, gap: 2 }}
       >
@@ -59,6 +61,7 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
           }}
         >
           <Icon name={focused ? meta.active : meta.icon} size="lg" color={focused ? "brandText" : "muted"} />
+          {route.name === "social" && unread > 0 ? <UnreadDot /> : null}
         </View>
         {/* Seis pestañas en 360 dp: «Nutrición» con la letra grande se partía en dos líneas. */}
         <Text variant="tiny" color={focused ? "brandText" : "muted"} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.2}>
@@ -83,5 +86,17 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
     >
       {items}
     </View>
+  );
+}
+
+/** Punto de «hay avisos nuevos» sobre el icono de Social (también lo usa `DesktopSidebar`). */
+export function UnreadDot() {
+  const { c } = useTheme();
+  return (
+    <View
+      testID="social-unread-dot"
+      pointerEvents="none"
+      style={{ position: "absolute", top: 3, right: space.md, width: 8, height: 8, borderRadius: radius.xs, backgroundColor: c.danger, borderWidth: 2, borderColor: c.surface }}
+    />
   );
 }

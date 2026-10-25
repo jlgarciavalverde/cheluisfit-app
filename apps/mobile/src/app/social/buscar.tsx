@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { Avatar } from "@/components/social/Avatar";
-import { EmptyState, ListGroup, ListRow, SearchField } from "@/components/ui";
+import { EmptyState, ListGroup, ListRow, SearchField, Text } from "@/components/ui";
 import { api, ApiError, type SocialUserSummary } from "@/data/api";
 import { SignedOutScreen } from "@/components/social/ScreenStates";
 import { SearchStatus } from "@/components/SearchStatus";
@@ -75,6 +75,13 @@ export default function SearchUsersScreen() {
                 title={u.name}
                 subtitle={`@${u.username}`}
                 leading={<Avatar name={u.name} url={u.avatarUrl} size="sm" />}
+                value={
+                  u.followState === "accepted" || u.followState === "pending" ? (
+                    <Text variant="caption" color="muted">
+                      {u.followState === "accepted" ? "Le sigues" : "Solicitado"}
+                    </Text>
+                  ) : undefined
+                }
                 chevron
                 onPress={() => router.push({ pathname: "/social/perfil/[username]", params: { username: u.username } })}
               />

@@ -172,18 +172,63 @@ export interface SocialComment {
   createdAt: number;
   author: PostAuthor;
 }
+/** Tarjeta de estadística pública (la calcula el móvil, `domain/socialStats.ts`). */
+export interface PublicStat {
+  key: string;
+  label: string;
+  value: string;
+  unit?: string;
+  detail?: string;
+}
+/** Perfil público tal como lo ven los demás (nunca el nombre real ni el correo de la cuenta). */
 export interface SocialProfile {
   id: string;
   username: string;
+  /** El nombre público (igual que `displayName`; se mantiene por las APK ≤ 0.19). */
   name: string;
+  displayName: string;
   bio: string;
+  city: string;
+  sports: string[];
   avatarUrl?: string;
+  coverUrl?: string;
   isPrivate: boolean;
+  stats: PublicStat[];
+}
+/** Tu propio perfil público, para el editor: con los ids de las fotos y las estadísticas ocultas. */
+export interface MySocialProfile {
+  username: string;
+  displayName: string;
+  bio: string;
+  city: string;
+  sports: string[];
+  avatarUrl?: string;
+  avatarMediaId: string | null;
+  coverUrl?: string;
+  coverMediaId: string | null;
+  isPrivate: boolean;
+  stats: (PublicStat & { visible: boolean })[];
 }
 export interface SocialUserSummary {
+  id?: string;
   username: string;
   name: string;
   avatarUrl?: string;
+  followState?: FollowState;
+}
+export type NotificationKind = "follow" | "follow_request" | "follow_accepted" | "like" | "comment";
+export interface SocialNotification {
+  id: string;
+  kind: NotificationKind;
+  createdAt: number;
+  read: boolean;
+  actor: PostAuthor;
+  postId?: string;
+  postKind?: Post["kind"];
+  postText?: string;
+  commentText?: string;
+  /** Solo en solicitudes: si sigue pendiente (ya aceptada o rechazada → `false`). */
+  pending?: boolean;
 }
 
 // El servidor manda urls relativas (`/api/media/:id`) — se completan aquí, una sola vez, para
@@ -192,7 +237,15 @@ const abs = (url?: string): string | undefined => (url ? `${API_BASE}${url}` : u
 const absAuthor = (a: PostAuthor): PostAuthor => ({ ...a, avatarUrl: abs(a.avatarUrl) });
 const absPost = (p: Post): Post => ({ ...p, author: absAuthor(p.author), media: p.media.map((m) => `${API_BASE}${m}`) });
 const absComment = (c: SocialComment): SocialComment => ({ ...c, author: absAuthor(c.author) });
-const absProfile = (p: SocialProfile): SocialProfile => ({ ...p, avatarUrl: abs(p.avatarUrl) });
+const absProfile = (p: SocialProfile): SocialProfile => ({
+  ...p,
+  displayName: p.displayName ?? p.name,
+  city: p.city ?? "",
+  sports: p.sports ?? [],
+  stats: p.stats ?? [],
+  avatarUrl: abs(p.avatarUrl),
+  coverUrl: abs(p.coverUrl),
+});
 const absSummary = (u: SocialUserSummary): SocialUserSummary => ({ ...u, avatarUrl: abs(u.avatarUrl) });
 
 export const api = {
@@ -282,20 +335,73 @@ export const api = {
   socialPost: async (token: string, id: string) => absPost(await request<Post>(`/api/social/posts/${id}`, { token })),
 
   socialProfile: async (token: string, username: string) => {
-    const r = await request<{ profile: SocialProfile; followState: FollowState; counts: { posts: number; followers: number; following: number }; posts: Post[] | null }>(
-      `/api/social/users/${encodeURIComponent(username)}`,
+    const r = await request<{
+      profile: SocialProfile;
+      followState: FollowState;
+      followsMe?: boolean;
+      counts: { posts: number; followers: number; following: number };
+      posts: Post[] | null;
+      nextCursor?: string | null;
+    }>(`/api/social/users/${encodeURIComponent(username)}`, { token });
+    return { ...r, followsMe: !!r.followsMe, nextCursor: r.nextCursor ?? null, profile: absProfile(r.profile), posts: r.posts?.map(absPost) ?? null };
+  },
+
+  socialUserPosts: async (token: string, username: string, cursor: string) => {
+    const r = await request<{ posts: Post[]; nextCursor: string | null }>(`/api/social/users/${encodeURIComponent(username)}/posts?cursor=${encodeURIComponent(cursor)}`, { token });
+    return { posts: r.posts.map(absPost), nextCursor: r.nextCursor };
+  },
+
+  socialFollowList: async (token: string, username: string, which: "followers" | "following") => {
+    const r = await request<{ users: SocialUserSummary[] }>(`/api/social/users/${encodeURIComponent(username)}/${which}`, { token });
+    return r.users.map(absSummary);
+  },
+
+  socialMyProfile: async (token: string): Promise<MySocialProfile> => {
+    const r = await request<MySocialProfile>("/api/social/profile", { token });
+    return {
+      ...r,
+      displayName: r.displayName ?? r.username,
+      city: r.city ?? "",
+      sports: r.sports ?? [],
+      stats: r.stats ?? [],
+      avatarMediaId: r.avatarMediaId ?? null,
+      coverMediaId: r.coverMediaId ?? null,
+      avatarUrl: abs(r.avatarUrl),
+      coverUrl: abs(r.coverUrl),
+    };
+  },
+
+  socialUpdateProfile: (
+    token: string,
+    patch: {
+      displayName?: string;
+      bio?: string;
+      city?: string;
+      sports?: string[];
+      avatarMediaId?: string | null;
+      coverMediaId?: string | null;
+      isPrivate?: boolean;
+      hiddenStats?: string[];
+      username?: string;
+    },
+  ) => request<void>("/api/social/profile", { method: "PUT", token, body: patch }),
+
+  socialUploadStats: (token: string, stats: PublicStat[]) => request<void>("/api/social/profile/stats", { method: "PUT", token, body: { stats } }),
+
+  socialRemoveFollower: (token: string, username: string) => request<void>(`/api/social/followers/${encodeURIComponent(username)}`, { method: "DELETE", token }),
+
+  socialNotifications: async (token: string, cursor?: string | null) => {
+    const r = await request<{ notifications: SocialNotification[]; nextCursor: string | null }>(
+      `/api/social/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
       { token },
     );
-    return { ...r, profile: absProfile(r.profile), posts: r.posts?.map(absPost) ?? null };
+    return { notifications: r.notifications.map((n) => ({ ...n, actor: absAuthor(n.actor) })), nextCursor: r.nextCursor };
   },
+  socialUnreadCount: (token: string) => request<{ count: number }>("/api/social/notifications/unread-count", { token }),
+  socialMarkRead: (token: string, upTo?: number) => request<{ ok: boolean }>("/api/social/notifications/read", { method: "POST", token, body: upTo ? { upTo } : {} }),
 
-  socialMyProfile: async (token: string) => {
-    const r = await request<{ username: string; bio: string; avatarUrl?: string; isPrivate: boolean }>("/api/social/profile", { token });
-    return { ...r, avatarUrl: abs(r.avatarUrl) };
-  },
-
-  socialUpdateProfile: (token: string, patch: { bio?: string; avatarMediaId?: string | null; isPrivate?: boolean; username?: string }) =>
-    request<void>("/api/social/profile", { method: "PUT", token, body: patch }),
+  updateMe: (token: string, patch: { name?: string; email?: string }) => request<{ user: { id: string; name: string; email: string; role: "admin" | "member" } }>("/api/me", { method: "PUT", token, body: patch }),
+  changePassword: (token: string, current: string, next: string) => request<{ ok: boolean }>("/api/me/password", { method: "PUT", token, body: { current, next } }),
 
   socialSearch: async (token: string, q: string) => {
     const r = await request<{ users: SocialUserSummary[] }>(`/api/social/search?q=${encodeURIComponent(q)}`, { token });

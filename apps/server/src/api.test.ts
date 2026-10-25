@@ -577,6 +577,129 @@ describe("red social", () => {
   }
   const snapshot = { snapshotVersion: 1, kind: "free" };
 
+  it("perfil público: nombre público, ciudad, deportes; la cuenta (nombre real, correo) no sale", async () => {
+    const dani = await registerViaInvite("Daniel Pérez García", "dani-p20@casa.es");
+    const up = await call("PUT", "/api/social/profile", dani.token, { displayName: "Dani", city: "Murcia", sports: ["running", "gym", "running"], bio: "Corro" });
+    expect(up.status).toBe(200);
+    const other = await registerViaInvite("Otro", "otro-p20@casa.es");
+    const r = await call("GET", "/api/social/users/daniel-perez-garcia", other.token);
+    expect(r.body.profile).toMatchObject({ displayName: "Dani", name: "Dani", city: "Murcia", sports: ["running", "gym"], bio: "Corro" });
+    expect(JSON.stringify(r.body)).not.toContain("dani-p20@casa.es");
+    expect(JSON.stringify(r.body)).not.toContain("Daniel Pérez García");
+    // Y en sus posts y comentarios sale también el nombre público.
+    const post = await call("POST", "/api/social/posts", dani.token, { kind: "free", text: "x", snapshot });
+    await call("POST", `/api/social/posts/${post.body.id}/comments`, dani.token, { text: "yo" });
+    expect((await call("GET", `/api/social/posts/${post.body.id}`, other.token)).body.author.name).toBe("Dani");
+    expect((await call("GET", `/api/social/posts/${post.body.id}/comments`, other.token)).body.comments[0].author.name).toBe("Dani");
+  });
+
+  it("@usuario: reservado → 400, ocupado → 409; foto o portada de otra persona → 403", async () => {
+    const eva = await registerViaInvite("Elba", "eva-p20@casa.es");
+    expect((await call("PUT", "/api/social/profile", eva.token, { username: "admin" })).status).toBe(400);
+    await registerViaInvite("Ocupado", "ocu-p20@casa.es");
+    expect((await call("PUT", "/api/social/profile", eva.token, { username: "ocupado" })).status).toBe(409);
+    expect((await call("PUT", "/api/social/profile", eva.token, { coverMediaId: "no-es-mio" })).status).toBe(403);
+  });
+
+  it("estadísticas: el móvil sube el resumen y solo se enseñan las visibles; con cuenta privada, nada", async () => {
+    const fer = await registerViaInvite("Fede", "fer-p20@casa.es");
+    const stats = [
+      { key: "kmMonth", label: "Km este mes", value: "84,2", unit: "km" },
+      { key: "pr5k", label: "Mejor 5K", value: "22:31" },
+    ];
+    expect((await call("PUT", "/api/social/profile/stats", fer.token, { stats })).status).toBe(200);
+    expect((await call("PUT", "/api/social/profile/stats", fer.token, { stats: [{ key: "peso", label: "Peso", value: "80" }] })).status).toBe(400);
+    await call("PUT", "/api/social/profile", fer.token, { hiddenStats: ["pr5k"] });
+    const gus = await registerViaInvite("Gael", "gus-p20@casa.es");
+    expect((await call("GET", "/api/social/users/fede", gus.token)).body.profile.stats).toEqual([stats[0]]);
+    const mine = await call("GET", "/api/social/profile", fer.token);
+    expect(mine.body.stats).toEqual([{ ...stats[0], visible: true }, { ...stats[1], visible: false }]);
+    await call("PUT", "/api/social/profile", fer.token, { isPrivate: true });
+    const hidden = (await call("GET", "/api/social/users/fede", gus.token)).body.profile;
+    expect(hidden).toMatchObject({ stats: [], bio: "", sports: [], displayName: "Fede" });
+  });
+
+  it("avisos: seguir, like y comentario avisan al dueño; sin auto-avisos ni duplicados; quitar like los borra", async () => {
+    const hugo = await registerViaInvite("Hugo", "hugo-p20@casa.es");
+    const ines = await registerViaInvite("Ines", "ines-p20@casa.es");
+    const post = await call("POST", "/api/social/posts", hugo.token, { kind: "free", text: "Mi carrera de hoy", snapshot });
+    await call("PUT", `/api/social/posts/${post.body.id}/like`, hugo.token); // propio: sin aviso
+    await call("PUT", "/api/social/follows/hugo", ines.token);
+    await call("PUT", `/api/social/posts/${post.body.id}/like`, ines.token);
+    await call("DELETE", `/api/social/posts/${post.body.id}/like`, ines.token);
+    await call("PUT", `/api/social/posts/${post.body.id}/like`, ines.token);
+    await call("POST", `/api/social/posts/${post.body.id}/comments`, ines.token, { text: "¡Vaya ritmo!" });
+    expect((await call("GET", "/api/social/notifications/unread-count", hugo.token)).body.count).toBe(3);
+    const list = (await call("GET", "/api/social/notifications", hugo.token)).body.notifications;
+    const comment = list.find((n: { kind: string }) => n.kind === "comment");
+    expect(list.map((n: { kind: string }) => n.kind).sort()).toEqual(["comment", "follow", "like"]);
+    expect(comment).toMatchObject({ actor: { username: "ines", name: "Ines" }, commentText: "¡Vaya ritmo!", postText: "Mi carrera de hoy", read: false });
+    await call("POST", "/api/social/notifications/read", hugo.token, {});
+    expect((await call("GET", "/api/social/notifications/unread-count", hugo.token)).body.count).toBe(0);
+    await call("DELETE", `/api/social/posts/${post.body.id}/like`, ines.token);
+    expect((await call("GET", "/api/social/notifications", hugo.token)).body.notifications.map((n: { kind: string }) => n.kind).sort()).toEqual(["comment", "follow"]);
+  });
+
+  it("solicitudes: aviso de solicitud, aceptarla avisa a quien la pidió; al pasar a público se aceptan las pendientes", async () => {
+    const juan = await registerViaInvite("Juan", "juan-p20@casa.es");
+    await call("PUT", "/api/social/profile", juan.token, { isPrivate: true });
+    const kai = await registerViaInvite("Kai", "kai-p20@casa.es");
+    const lia = await registerViaInvite("Lia", "lia-p20@casa.es");
+    await call("PUT", "/api/social/follows/juan", kai.token);
+    await call("PUT", "/api/social/follows/juan", lia.token);
+    const reqs = (await call("GET", "/api/social/notifications", juan.token)).body.notifications;
+    expect(reqs.every((n: { kind: string; pending: boolean }) => n.kind === "follow_request" && n.pending)).toBe(true);
+    await call("PUT", "/api/social/follows/kai/accept", juan.token);
+    expect((await call("GET", "/api/social/notifications", kai.token)).body.notifications[0]).toMatchObject({ kind: "follow_accepted", actor: { username: "juan" } });
+    await call("PUT", "/api/social/profile", juan.token, { isPrivate: false });
+    expect((await call("GET", "/api/social/users/juan", lia.token)).body.followState).toBe("accepted");
+    expect((await call("GET", "/api/social/follows/pending", juan.token)).body.requests).toEqual([]);
+  });
+
+  it("seguidores y seguidos: listas con la misma privacidad que los posts; quitar a un seguidor", async () => {
+    const mar = await registerViaInvite("Mar", "mar-p20@casa.es");
+    const nil = await registerViaInvite("Nil", "nil-p20@casa.es");
+    await call("PUT", "/api/social/follows/mar", nil.token);
+    const followers = await call("GET", "/api/social/users/mar/followers", nil.token);
+    expect(followers.body.users).toMatchObject([{ username: "nil", name: "Nil", followState: "self" }]);
+    expect((await call("GET", "/api/social/users/nil/following", mar.token)).body.users).toMatchObject([{ username: "mar", followState: "self" }]);
+    await call("PUT", "/api/social/profile", mar.token, { isPrivate: true });
+    const ona = await registerViaInvite("Olga", "ona-p20@casa.es");
+    expect((await call("GET", "/api/social/users/mar/followers", ona.token)).status).toBe(403);
+    expect((await call("DELETE", "/api/social/followers/nil", mar.token)).status).toBe(204);
+    expect((await call("GET", "/api/social/users/mar", nil.token)).body).toMatchObject({ followState: "none", posts: null });
+  });
+
+  it("posts de un perfil paginados con cursor (antes, como mucho 50)", async () => {
+    const pau = await registerViaInvite("Pau", "pau-p20@casa.es");
+    for (let i = 0; i < 23; i++) await call("POST", "/api/social/posts", pau.token, { kind: "free", text: `p${i}`, snapshot });
+    const first = await call("GET", "/api/social/users/pau", pau.token);
+    expect(first.body.posts).toHaveLength(20);
+    const more = await call("GET", `/api/social/users/pau/posts?cursor=${encodeURIComponent(first.body.nextCursor)}`, pau.token);
+    expect(more.body.posts).toHaveLength(3);
+    expect(more.body.nextCursor).toBeNull();
+  });
+
+  it("buscar: por nombre público, y % o _ no son comodines", async () => {
+    const quim = await registerViaInvite("Quim", "quim-p20@casa.es");
+    await call("PUT", "/api/social/profile", quim.token, { displayName: "El Rayo" });
+    const rosa = await registerViaInvite("Rosa", "rosa-p20@casa.es");
+    expect((await call("GET", "/api/social/search?q=rayo", rosa.token)).body.users).toMatchObject([{ username: "quim", name: "El Rayo" }]);
+    expect((await call("GET", "/api/social/search?q=%25%25", rosa.token)).body.users).toEqual([]);
+  });
+
+  it("cuenta: cambiar nombre y correo (sin repetir), y la contraseña pidiendo la actual", async () => {
+    const sol = await registerViaInvite("Sol", "sol-p20@casa.es");
+    expect((await call("PUT", "/api/me", sol.token, { email: "chelu@casa.es" })).status).toBe(409);
+    const ok = await call("PUT", "/api/me", sol.token, { name: "Soledad Ruiz", email: "sole-p20@casa.es" });
+    expect(ok.body.user).toMatchObject({ name: "Soledad Ruiz", email: "sole-p20@casa.es" });
+    expect((await call("PUT", "/api/me/password", sol.token, { current: "mala", next: "otranueva1" })).status).toBe(403);
+    expect((await call("PUT", "/api/me/password", sol.token, { current: "supersecreta1", next: "otranueva1" })).status).toBe(200);
+    expect((await call("POST", "/api/auth/login", undefined, { email: "sole-p20@casa.es", password: "otranueva1" })).status).toBe(200);
+    // El nombre real no cambia el público.
+    expect((await call("GET", "/api/social/profile", sol.token)).body.displayName).toBe("Sol");
+  });
+
   it("«mi perfil» (GET /api/social/profile) devuelve el propio username, para saber a dónde navegar", async () => {
     const rio = await registerViaInvite("Río Grande", "rio@casa.es");
     const r = await call("GET", "/api/social/profile", rio.token);

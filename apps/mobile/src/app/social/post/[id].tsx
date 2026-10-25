@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { FlatList, View } from "react-native";
+import { FlatList, Pressable, View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { Avatar } from "@/components/social/Avatar";
 import { PostCard } from "@/components/social/PostCard";
@@ -63,8 +63,10 @@ export default function PostDetailScreen() {
     if (!post || !text.trim()) return;
     setSending(true);
     try {
-      const { id: commentId } = await api.socialAddComment(token, post.id, text.trim());
-      setComments((c) => [...(c ?? []), { id: commentId, text: text.trim(), createdAt: Date.now(), author: { id: me!.id, name: me!.name, username: "" } }]);
+      await api.socialAddComment(token, post.id, text.trim());
+      // Se recarga la lista en vez de inventar el comentario: así sale con tu nombre público y tu
+      // foto (antes salía sin @usuario ni foto hasta volver a entrar).
+      setComments(await api.socialComments(token, post.id));
       updatePost(post.id, { commentsCount: post.commentsCount + 1 });
       setPost((p) => (p ? { ...p, commentsCount: p.commentsCount + 1 } : p));
       setText("");
@@ -134,13 +136,23 @@ export default function PostDetailScreen() {
           ListHeaderComponentStyle={{ marginBottom: space.md }}
           renderItem={({ item }) => (
             <View style={{ flexDirection: "row", gap: space.sm, paddingVertical: space.sm, alignItems: "flex-start" }} testID={`comment-${item.id}`}>
-              <Avatar name={item.author.name} url={item.author.avatarUrl} size="sm" />
-              <View style={{ flex: 1 }}>
-                <Text variant="caption" color="muted">
-                  {item.author.name} · {fmtRelativeTime(item.createdAt)}
-                </Text>
-                <Text variant="body">{item.text}</Text>
-              </View>
+              <Pressable
+                onPress={() => router.push({ pathname: "/social/perfil/[username]", params: { username: item.author.username } })}
+                accessibilityRole="button"
+                accessibilityLabel={`Ver perfil de ${item.author.name}`}
+                style={{ flexDirection: "row", gap: space.sm, flex: 1, alignItems: "flex-start" }}
+              >
+                <Avatar name={item.author.name} url={item.author.avatarUrl} size="sm" />
+                <View style={{ flex: 1 }}>
+                  <Text variant="caption" color="muted">
+                    <Text variant="caption" color="text">
+                      {item.author.name}
+                    </Text>{" "}
+                    @{item.author.username} · {fmtRelativeTime(item.createdAt)}
+                  </Text>
+                  <Text variant="body">{item.text}</Text>
+                </View>
+              </Pressable>
               {item.author.id === me?.id || post.author.id === me?.id ? (
                 <IconButton icon="close" label="Borrar comentario" size="sm" onPress={() => setConfirm({ kind: "comment", id: item.id })} />
               ) : null}

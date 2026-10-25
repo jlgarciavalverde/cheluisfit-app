@@ -74,14 +74,61 @@ export const CreateCommentInput = z.object({
   text: z.string().trim().min(1, "Escribe algo").max(500),
 });
 
+/** Nombres que no se pueden coger como @usuario (rutas, roles, confusión con la app). */
+export const RESERVED_USERNAMES = new Set(["admin", "administrador", "api", "app", "cheluisfit", "social", "soporte", "support", "root", "sistema", "system", "null", "undefined", "perfil", "ajustes"]);
+
+export const SPORTS = ["running", "gym", "futbol", "ciclismo", "natacion", "senderismo", "padel", "otros"] as const;
+
 export const UpdateProfileInput = z.object({
+  displayName: z.string().trim().min(1, "Pon un nombre").max(40).optional(),
   bio: z.string().trim().max(300).optional(),
+  city: z.string().trim().max(40).optional(),
+  sports: z.array(z.enum(SPORTS)).max(SPORTS.length).optional(),
   avatarMediaId: z.string().nullable().optional(),
+  coverMediaId: z.string().nullable().optional(),
   isPrivate: z.boolean().optional(),
+  /** Claves de estadística que NO se enseñan (ver `ProfileStatsInput`). */
+  hiddenStats: z.array(z.string().max(30)).max(30).optional(),
   username: z
     .string()
     .trim()
     .toLowerCase()
     .regex(USERNAME_RE, "Solo minúsculas, números y guiones, 3-30 caracteres")
+    .refine((u) => !RESERVED_USERNAMES.has(u), "Ese nombre de usuario está reservado")
     .optional(),
+});
+
+export const STAT_KEYS = ["kmMonth", "runsMonth", "workoutsWeek", "workoutsMonth", "streak", "pr5k", "pr10k", "prHalf", "longestRun", "fastestPace", "best1rm1", "best1rm2", "best1rm3"] as const;
+
+/**
+ * Resumen de estadísticas que calcula el móvil (`domain/socialStats.ts`) y sube él mismo: el
+ * servidor no lee los blobs de nadie, solo guarda y enseña este texto ya formateado.
+ */
+export const ProfileStatsInput = z.object({
+  stats: z
+    .array(
+      z.object({
+        key: z.enum(STAT_KEYS),
+        label: z.string().trim().min(1).max(40),
+        value: z.string().trim().min(1).max(24),
+        unit: z.string().trim().max(10).optional(),
+        detail: z.string().trim().max(40).optional(),
+      }),
+    )
+    .max(STAT_KEYS.length),
+});
+
+export const UpdateMeInput = z.object({
+  name: z.string().trim().min(1, "Pon un nombre").max(80).optional(),
+  email: z.string().trim().toLowerCase().email("Correo no válido").max(200).optional(),
+});
+
+export const ChangePasswordInput = z.object({
+  current: z.string().min(1, "Falta la contraseña actual"),
+  next: z.string().min(8, "Mínimo 8 caracteres").max(200),
+});
+
+export const ReadNotificationsInput = z.object({
+  /** Marca como leídas las de antes de este instante (ms); sin él, todas. */
+  upTo: z.number().int().positive().optional(),
 });

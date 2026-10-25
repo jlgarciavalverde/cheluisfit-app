@@ -9,6 +9,7 @@ import { Button, Card, CheckRow, Chip, Icon, ListGroup, ListRow, Text, TextField
 import { toast } from "@/components/ui/Toast";
 import { api, ApiError } from "@/data/api";
 import { useAuth } from "@/data/authStore";
+import { useSocial } from "@/data/socialStore";
 import type { Activity } from "@/domain/running";
 import { useRunning } from "@/data/runningStore";
 import type { Workout } from "@/domain/strength";
@@ -92,6 +93,11 @@ export default function PublishScreen() {
         mediaIds: photos.map((p) => p.id),
       });
       toast("Publicado");
+      // Al feed ya, sin esperar a refrescarlo (antes no salía hasta tirar hacia abajo).
+      api
+        .socialPost(token, id)
+        .then((post) => useSocial.getState().applyPost(post))
+        .catch(() => {});
       router.replace({ pathname: "/social/post/[id]", params: { id } });
     } catch (e) {
       toast(e instanceof ApiError ? e.message : "No se pudo publicar");

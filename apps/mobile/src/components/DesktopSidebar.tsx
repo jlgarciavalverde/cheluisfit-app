@@ -7,6 +7,8 @@ import { radius, space } from "@/theme/tokens";
 import { haptic } from "./ui/haptics";
 import { Icon } from "./ui/Icon";
 import { Text } from "./ui/Text";
+import { Badge } from "./ui/Badge";
+import { useNotifications } from "@/data/notificationsStore";
 
 /** Orden de las pestañas en la barra lateral (mismo orden que `(tabs)/_layout.tsx`). */
 const ROUTES = [
@@ -28,6 +30,7 @@ export function DesktopSidebar() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const unread = useNotifications((s) => s.unread);
 
   return (
     <View
@@ -56,7 +59,7 @@ export function DesktopSidebar() {
             testID={`tab-${name}`}
             accessibilityRole="tab"
             accessibilityState={{ selected: focused }}
-            accessibilityLabel={meta.label}
+            accessibilityLabel={name === "social" && unread > 0 ? `${meta.label}, ${unread} ${unread === 1 ? "aviso nuevo" : "avisos nuevos"}` : meta.label}
             onPress={() => {
               haptic.tap();
               if (!focused) router.navigate(path);
@@ -73,9 +76,10 @@ export function DesktopSidebar() {
             })}
           >
             <Icon name={focused ? meta.active : meta.icon} size="md" color={focused ? "brandText" : "muted"} />
-            <Text variant="bodyStrong" color={focused ? "brandText" : "muted"}>
+            <Text variant="bodyStrong" color={focused ? "brandText" : "muted"} style={{ flex: 1 }}>
               {meta.label}
             </Text>
+            {name === "social" && unread > 0 ? <Badge label={String(unread)} tone="danger" /> : null}
           </Pressable>
         );
       })}

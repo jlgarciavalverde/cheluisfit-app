@@ -47,7 +47,7 @@ export const useSocial = create<SocialState>()((set, get) => ({
     }
   },
 
-  applyPost: (post) => set((s) => ({ posts: [post, ...s.posts] })),
+  applyPost: (post) => set((s) => ({ posts: [post, ...s.posts.filter((p) => p.id !== post.id)] })),
   removePost: (postId) => set((s) => ({ posts: s.posts.filter((p) => p.id !== postId) })),
   updatePost: (postId, patch) => set((s) => ({ posts: s.posts.map((p) => (p.id === postId ? { ...p, ...patch } : p)) })),
 }));

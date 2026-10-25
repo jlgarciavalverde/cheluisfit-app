@@ -5,6 +5,7 @@ import { useAuth } from "./authStore";
 import { useRunning } from "./runningStore";
 import { useStrength } from "./strengthStore";
 import { useNutrition } from "./store";
+import { uploadProfileStats } from "./socialStats";
 import { syncNow } from "./sync";
 
 /** Como mucho una sincronización por minuto al volver a primer plano. */
@@ -34,7 +35,10 @@ export function useAutoSync() {
     last.current = now;
     if (pending.current) clearTimeout(pending.current);
     pending.current = null;
-    syncNow().catch(() => {}); // el error queda en `useAuth().syncError` para mostrarlo si hace falta
+    syncNow()
+      // Después, el resumen público del perfil de Social (sin cambios no sube nada).
+      .then(() => uploadProfileStats())
+      .catch(() => {}); // el error queda en `useAuth().syncError` para mostrarlo si hace falta
   };
 
   useEffect(() => {

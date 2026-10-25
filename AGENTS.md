@@ -296,6 +296,32 @@ seguimiento), feed, posts con foto y comentarios/likes. Diseño completo en `doc
   (`manipulateAsync(uri, [], {compress:0.8, format: SaveFormat.JPEG})`) antes de subir, sea cual
   sea el formato de origen — arreglo de raíz, no depende de `kind` (el bloque de fotos es el
   mismo para publicación libre, carrera o entreno).
+- **Perfil público vs. privado (0.20)**: lo que ven los demás vive en `profiles` —
+  `display_name` (apodo; rellenado desde `users.name` en la migración), foto, portada
+  (`cover_media_id`), bio, ciudad, deportes (`SPORTS`, `domain/sports.ts`) y `stats`— y se edita en
+  `social/editar-perfil.tsx`. **El nombre real y el correo de `users` no salen nunca de las rutas
+  sociales**: todo autor/persona se pinta con `publicUser()` y `PUBLIC_NAME` (`routes/social.ts`).
+  Lo privado (nombre real, correo, contraseña: `PUT /api/me`, `PUT /api/me/password`, que cierra
+  las demás sesiones) se edita en `cuenta-datos.tsx`, y los datos de salud siguen en `objetivo.tsx`.
+  Con cuenta privada, quien no sigue solo recibe la cabecera (nombre, foto, @): ni bio, ni ciudad,
+  ni deportes, ni estadísticas. `@usuario` con lista de reservados (`RESERVED_USERNAMES`).
+- **Estadísticas públicas = resumen que sube el móvil**: el servidor sigue sin leer blobs.
+  `domain/socialStats.ts` (`buildProfileStats`: km y carreras del mes, entrenos, racha, récords de
+  running, 3 mejores 1RM; nunca peso/medidas/comida) → `data/socialStats.ts` lo sube tras cada
+  sincronización (`useAutoSync`) solo si cambió y como mucho cada 6 h (el editor lo fuerza).
+  Qué se enseña lo decide `hidden_stats` (por clave), no el móvil.
+- **Avisos (0.20, sin push)**: tabla `notifications` (follow, follow_request, follow_accepted,
+  like, comment). `notify()` nunca avisa de uno mismo y sustituye en vez de duplicar (like
+  quitado y vuelto a dar); quitar el like, dejar de seguir o rechazar borra su aviso; los de
+  comentario/post se van por `ON DELETE CASCADE`. Al pasar de privado a público se aceptan las
+  solicitudes pendientes (antes se quedaban colgadas sin ningún sitio donde verlas).
+  `data/notificationsStore.ts` (sin `persist`) refresca el contador al iniciar sesión, al volver a
+  primer plano y al entrar en Social; punto en la pestaña (`UnreadDot`), número en la barra lateral
+  y campana en la cabecera de Social → `social/avisos.tsx` (se marcan leídos al salir).
+- Seguidores/seguidos (`/users/:u/followers|following`, misma regla que los posts →
+  `social/conexiones.tsx`), quitar a un seguidor (`DELETE /api/social/followers/:u`), posts de un
+  perfil paginados (`/users/:u/posts?cursor=`), dejar de seguir con confirmación. Los límites de
+  Social son por sesión (`perUserKey`), como el resto.
 - **Buscador de personas** (`social/buscar.tsx`, botón nuevo junto a «Publicar» en la cabecera de
   `(tabs)/social.tsx`): mismo patrón de debounce (~250 ms, sin buscar con menos de 2 caracteres)
   que `anadir.tsx`. Usa `api.socialSearch()`, que ya existía del plan original sin ninguna

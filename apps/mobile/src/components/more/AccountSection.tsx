@@ -122,6 +122,8 @@ export function AccountSection() {
                 }
               }}
             />
+            <Button testID="go-edit-social-profile" label="Editar perfil público" icon="create-outline" variant="secondary" size="sm" onPress={() => router.push("/social/editar-perfil")} />
+            <Button testID="go-account-data" label="Datos de la cuenta" icon="key-outline" variant="secondary" size="sm" onPress={() => router.push("/cuenta-datos")} />
             <Button
               testID="logout"
               label="Cerrar sesión"

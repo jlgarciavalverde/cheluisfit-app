@@ -1,8 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { bearerToken, createSession, deleteSession, hashPassword, requireUser, safeEqual, verifyPassword } from "../auth";
+import { bearerToken, createSession, deleteSession, hashPassword, hashToken, requireUser, safeEqual, verifyPassword } from "../auth";
 import { all, get, insertProfileFor, run, tx } from "../db";
 import { HttpError, toUser } from "../http";
-import { LoginInput, RegisterInput } from "../schemas";
+import { ChangePasswordInput, LoginInput, RegisterInput, UpdateMeInput } from "../schemas";
 import type { Register } from "./ctx";
 
 const INVITE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -103,6 +103,35 @@ export const registerAccount: Register = (app, { db, cfg }) => {
       members: all(db, "SELECT * FROM users WHERE household_id = ? AND removed_at IS NULL ORDER BY created_at", user.householdId).map(toUser),
     };
     return { user: toUser(get(db, "SELECT * FROM users WHERE id = ?", user.id)!), household };
+  });
+
+  /**
+   * Datos privados de la cuenta (nombre real y correo). No cambian nada de Social: lo que ven los
+   * demás es el perfil público (`routes/social.ts`, `display_name`).
+   */
+  app.put("/api/me", authLimit, async (req) => {
+    const user = requireUser(db, req.headers.authorization);
+    const b = UpdateMeInput.parse(req.body);
+    if (b.email && b.email !== user.email && get(db, "SELECT 1 AS x FROM users WHERE email = ? AND id != ?", b.email, user.id)) {
+      throw new HttpError(409, "Ya existe una cuenta con ese correo");
+    }
+    run(db, "UPDATE users SET name = ?, email = ? WHERE id = ?", b.name ?? user.name, b.email ?? user.email, user.id);
+    return { user: toUser(get(db, "SELECT * FROM users WHERE id = ?", user.id)!) };
+  });
+
+  /** Cambiar la contraseña pidiendo la actual; cierra las demás sesiones (no la de este móvil). */
+  app.put("/api/me/password", authLimit, async (req) => {
+    const user = requireUser(db, req.headers.authorization);
+    const b = ChangePasswordInput.parse(req.body);
+    const row = get(db, "SELECT password_hash FROM users WHERE id = ?", user.id);
+    if (!(await verifyPassword(b.current, (row?.password_hash as string | undefined) ?? null))) throw new HttpError(403, "La contraseña actual no es correcta");
+    const hash = await hashPassword(b.next);
+    const current = bearerToken(req.headers.authorization);
+    tx(db, () => {
+      run(db, "UPDATE users SET password_hash = ? WHERE id = ?", hash, user.id);
+      run(db, "DELETE FROM sessions WHERE user_id = ? AND token_hash != ?", user.id, hashToken(current ?? ""));
+    });
+    return { ok: true };
   });
 
   /** Invitar a alguien (amigos/familia) — solo el admin. */

@@ -25,7 +25,7 @@ export function insertProfileFor(db: DB, userId: string, name: string): void {
   let username = base;
   let n = 2;
   while (get(db, "SELECT 1 AS x FROM profiles WHERE username = ?", username)) username = `${base}-${n++}`;
-  run(db, "INSERT INTO profiles (user_id, username, created_at) VALUES (?,?,?)", userId, username, Date.now());
+  run(db, "INSERT INTO profiles (user_id, username, display_name, created_at) VALUES (?,?,?,?)", userId, username, name.trim().slice(0, 40), Date.now());
 }
 
 /** Cada paso es SQL puro, o una función para lógica que SQL no puede expresar (backfills con
@@ -168,6 +168,29 @@ const MIGRATIONS: Migration[] = [
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at INTEGER NOT NULL
   );
+  `,  // 0.20: perfil público separado de la cuenta (nombre público, portada, ciudad, deportes y un
+  // resumen de estadísticas que calcula y sube el móvil — el servidor sigue sin leer blobs) y la
+  // bandeja de avisos de Social. `display_name` parte del nombre de la cuenta.
+  `
+  ALTER TABLE profiles ADD COLUMN display_name TEXT NOT NULL DEFAULT '';
+  ALTER TABLE profiles ADD COLUMN cover_media_id TEXT REFERENCES media(id);
+  ALTER TABLE profiles ADD COLUMN city TEXT NOT NULL DEFAULT '';
+  ALTER TABLE profiles ADD COLUMN sports TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE profiles ADD COLUMN stats TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE profiles ADD COLUMN hidden_stats TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE profiles ADD COLUMN stats_updated_at INTEGER;
+  UPDATE profiles SET display_name = (SELECT name FROM users WHERE users.id = profiles.user_id);
+  CREATE TABLE notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('follow','follow_request','follow_accepted','like','comment')),
+    post_id TEXT REFERENCES posts(id) ON DELETE CASCADE,
+    comment_id TEXT REFERENCES comments(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    read_at INTEGER
+  );
+  CREATE INDEX idx_notifications_user ON notifications(user_id, created_at DESC);
   `,
 ];
 

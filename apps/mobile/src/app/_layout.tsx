@@ -27,6 +27,7 @@ import { useOnboarding } from "@/data/onboardingStore";
 import { useAppUpdateCheck } from "@/data/appUpdate";
 import { onStorageProblem } from "@/data/persistSafety";
 import { useAutoSync } from "@/data/useAutoSync";
+import { useNotificationsPolling } from "@/data/notificationsStore";
 import { ThemeProvider, useBreakpoint, useTheme } from "@/theme/ThemeProvider";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -37,6 +38,7 @@ function Shell() {
   const token = useAuth((s) => s.token);
   const onboardingSeen = useOnboarding((s) => s.seen);
   useAutoSync();
+  useNotificationsPolling();
   useAppUpdateCheck();
   // Aviso de la sincronización (p. ej. ganó la versión de la cuenta y lo local quedó guardado en
   // Más): se enseña una vez como toast y se limpia; la copia recuperable sigue en Más → Cuenta.

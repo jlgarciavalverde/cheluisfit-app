@@ -3,17 +3,15 @@ import { useState } from "react";
 import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { LineChart } from "@/components/charts/LineChart";
-import { Button, Card, Chip, EmptyState, IconButton, Overline, Section, Text, TextField } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, IconButton, ListGroup, ListRow, Section, Stat, Text, TextField } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useNutrition, useTargets } from "@/data/store";
 import { addDays, dayLabel, shortDayLabel, todayKey } from "@/domain/dates";
 import { fmtInt, fmtNum, parseNum } from "@/domain/format";
 import { isPlausibleWeight, latestWeight, normalizeWeights, weightChange } from "@/domain/weight";
-import { useTheme } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
 
 export default function WeightScreen() {
-  const { c } = useTheme();
   const weights = useNutrition((s) => s.weights);
   const addWeight = useNutrition((s) => s.addWeight);
   const removeWeight = useNutrition((s) => s.removeWeight);
@@ -43,28 +41,16 @@ export default function WeightScreen() {
       <View style={{ gap: space.lg }}>
         <Card style={{ gap: space.md }}>
           <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
-            <View>
-              <Overline color="brandText">Último peso</Overline>
-              <Text variant="display" tabular testID="last-weight">
-                {last ? fmtNum(last.kg) : "—"}
-                <Text variant="body" color="muted"> kg</Text>
-              </Text>
-              {last ? (
-                <Text variant="caption" color="muted">
-                  {dayLabel(last.date, today)}
-                </Text>
-              ) : null}
-            </View>
+            <Stat size="xl" value={last ? fmtNum(last.kg) : "—"} unit="kg" label={last ? `Último peso · ${dayLabel(last.date, today)}` : "Último peso"} valueTestID="last-weight" />
             {change30 !== null ? (
-              <View style={{ alignItems: "flex-end" }}>
-                <Text variant="heading" tabular color={change30 === 0 ? "text" : "text"} testID="weight-change">
-                  {change30 > 0 ? "+" : change30 < 0 ? "−" : ""}
-                  {fmtNum(Math.abs(change30))} kg
-                </Text>
-                <Text variant="caption" color="muted">
-                  en 30 días
-                </Text>
-              </View>
+              <Stat
+                size="md"
+                align="center"
+                value={`${change30 > 0 ? "+" : change30 < 0 ? "−" : ""}${fmtNum(Math.abs(change30))}`}
+                unit="kg"
+                label="en 30 días"
+                valueTestID="weight-change"
+              />
             ) : null}
           </View>
           {chart.length >= 2 ? (
@@ -114,37 +100,28 @@ export default function WeightScreen() {
 
         {list.length > 0 ? (
           <Section kind="overline" title="Historial" gap={space.sm}>
-            <Card padded={false}>
-              {[...list].reverse().map((w, i) => (
-                <View
+            <ListGroup>
+              {[...list].reverse().map((w) => (
+                <ListRow
                   key={w.date}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingLeft: space.lg,
-                    borderTopWidth: i > 0 ? 1 : 0,
-                    borderTopColor: c.border,
-                  }}
-                >
-                  <Text variant="body" style={{ flex: 1 }}>
-                    {dayLabel(w.date, today)}
-                  </Text>
-                  <Text variant="bodyStrong" tabular>
-                    {fmtNum(w.kg)} kg
-                  </Text>
-                  <IconButton
-                    icon="trash-outline"
-                    label={`Borrar peso del ${shortDayLabel(w.date)}`}
-                    color="muted"
-                    size="md"
-                    onPress={() => {
-                      const removed = removeWeight(w.date);
-                      if (removed) toast("Peso borrado", { actionLabel: "Deshacer", onAction: () => addWeight(removed.date, removed.kg) });
-                    }}
-                  />
-                </View>
+                  title={dayLabel(w.date, today)}
+                  minHeight={52}
+                  value={<Text variant="bodyStrong" tabular>{fmtNum(w.kg)} kg</Text>}
+                  trailing={
+                    <IconButton
+                      icon="trash-outline"
+                      label={`Borrar peso del ${shortDayLabel(w.date)}`}
+                      color="muted"
+                      size="md"
+                      onPress={() => {
+                        const removed = removeWeight(w.date);
+                        if (removed) toast("Peso borrado", { actionLabel: "Deshacer", onAction: () => addWeight(removed.date, removed.kg) });
+                      }}
+                    />
+                  }
+                />
               ))}
-            </Card>
+            </ListGroup>
           </Section>
         ) : (
           <EmptyState icon="scale-outline" title="Sin pesos todavía" text="Anota tu primer peso arriba." />

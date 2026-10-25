@@ -1,11 +1,12 @@
 import { EMPTY_FRIDGE, migrateFridge } from "./fridge";
 import { describe, expect, it } from "vitest";
-import { foodFromMealProposal, nutritionContext, runningContext, sectionForPath, strengthContext } from "./aiContext";
+import { foodFromMealProposal, nutritionContext, runningContext, sectionForPath, strengthContext , AI_MAX_MESSAGES, chatHistory } from "./aiContext";
 import { addDays } from "./dates";
 import { newSet } from "./strength";
 import type { Activity, Template } from "./running";
 import type { Workout } from "./strength";
 import type { Entry, Profile, Targets } from "./types";
+
 
 const TODAY = "2026-09-23";
 
@@ -139,8 +140,6 @@ describe("foodFromMealProposal", () => {
     expect(food.per100.protein).toBe(10);
   });
 });
-
-import { AI_MAX_MESSAGES, chatHistory } from "./aiContext";
 
 describe("chatHistory", () => {
   it("resume las respuestas que solo traen propuesta en vez de mandarlas vacías", () => {

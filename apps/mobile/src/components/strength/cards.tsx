@@ -12,11 +12,11 @@ import {
   type Workout,
   workoutTotals,
 } from "@/domain/strength";
-import { useTheme } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card, PressableCard } from "../ui/Card";
+import { Divider } from "../ui/ListRow";
 import { ProgressBar } from "../ui/ProgressBar";
 import { Text } from "../ui/Text";
 
@@ -129,7 +129,6 @@ export function WorkoutCard({ workout, onPress }: { workout: Workout; onPress: (
 
 /** Series por músculo esta semana; referencia habitual 10–20 series por músculo y semana. */
 export function MuscleVolumeCard({ sets }: { sets: Partial<Record<Muscle, number>> }) {
-  const { c } = useTheme();
   const rows = (Object.entries(sets) as [Muscle, number][]).sort((a, b) => b[1] - a[1]).slice(0, 8);
   return (
     <Card style={{ gap: space.md }} testID="muscle-volume">
@@ -161,7 +160,7 @@ export function MuscleVolumeCard({ sets }: { sets: Partial<Record<Muscle, number
           </View>
         ))
       )}
-      <View style={{ height: 1, backgroundColor: c.border }} />
+      <Divider />
       <Text variant="caption" color="faint">
         Verde = dentro de 10–20. Naranja = más de 20.
       </Text>

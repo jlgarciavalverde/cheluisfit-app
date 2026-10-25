@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { weekDates } from "./dates";
-import { isOnTarget, scaleNutrients, weekSummary } from "./nutrition";
+import { isOnTarget, scaleNutrients, weekSummary , bmr as bmrOf, calcTargets as calcT, carbsFor as carbsOf } from "./nutrition";
 import type { Entry, Nutrients } from "./types";
 import { isPlausibleWeight, latestWeight, normalizeWeights, weightChange } from "./weight";
+
 
 const per100: Nutrients = { kcal: 100, protein: 10, carbs: 10, fat: 1, fiber: 1, sugars: 1, satFat: 0, salt: 0 };
 const e = (date: string, grams: number, id = `${date}-${grams}`): Entry => ({
@@ -78,8 +79,6 @@ describe("peso", () => {
     expect(isPlausibleWeight(Number.NaN)).toBe(false);
   });
 });
-
-import { bmr as bmrOf, calcTargets as calcT, carbsFor as carbsOf } from "./nutrition";
 
 describe("objetivos: suelo de seguridad y peso de referencia", () => {
   it("un déficit nunca baja del metabolismo basal ni de 1.200 kcal (mujer)", () => {

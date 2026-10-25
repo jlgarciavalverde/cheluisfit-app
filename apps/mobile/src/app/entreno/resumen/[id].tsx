@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { PRBadges, WorkoutSets } from "@/components/strength/WorkoutSets";
-import { Callout, Button, Card, EmptyState, Icon, Text } from "@/components/ui";
+import { Callout, Button, Card, EmptyState, Icon, Text, Stat, StatGrid } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useStrength } from "@/data/strengthStore";
 import { fmtDuration, fmtInt } from "@/domain/format";
@@ -46,33 +46,11 @@ export default function WorkoutSummaryScreen() {
       <ScreenHeader title="¡Entrenamiento guardado!" subtitle={workout.name} />
       <View style={{ gap: space.lg }}>
         <Card style={{ gap: space.md }}>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.xl }}>
-            <View>
-              <Text variant="display" tabular testID="sum-duration">
-                {fmtDuration(t.durationS)}
-              </Text>
-              <Text variant="caption" color="muted">
-                duración
-              </Text>
-            </View>
-            <View>
-              <Text variant="display" tabular testID="sum-volume">
-                {fmtInt(t.volume)}
-                <Text variant="caption" color="muted"> kg</Text>
-              </Text>
-              <Text variant="caption" color="muted">
-                volumen
-              </Text>
-            </View>
-            <View>
-              <Text variant="display" tabular>
-                {t.workingSets}
-              </Text>
-              <Text variant="caption" color="muted">
-                series
-              </Text>
-            </View>
-          </View>
+          <StatGrid>
+            <Stat size="lg" valueTestID="sum-duration" value={fmtDuration(t.durationS)} label="Duración" />
+            <Stat size="lg" valueTestID="sum-volume" value={fmtInt(t.volume)} unit="kg" label="Volumen" />
+            <Stat size="lg" value={String(t.workingSets)} label="Series" />
+          </StatGrid>
         </Card>
 
         {prs.length > 0 ? (

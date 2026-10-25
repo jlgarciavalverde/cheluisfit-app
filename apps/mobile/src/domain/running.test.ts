@@ -16,6 +16,10 @@ import {
   weekStart,
 } from "./running";
 
+import { cloneItems, moveItem, newRepeat, newStep, templateProblems , applyTemplate, checkManualRun, clearTemplate, defaultMaxHr, hrZoneOf, hrZoneRange, matchPlanned , applyTemplate as applyTpl, matchPlanned as matchP, prTimeS, runningPRs as prsOf } from "./running";
+
+
+
 const series: Template = {
   id: "t1",
   name: "Series 6×800",
@@ -152,8 +156,6 @@ describe("sesiones y semanas", () => {
   });
 });
 
-import { cloneItems, moveItem, newRepeat, newStep, templateProblems } from "./running";
-
 describe("edición de plantillas", () => {
   it("mueve elementos sin salirse de la lista", () => {
     expect(moveItem([1, 2, 3], 1, -1)).toEqual([2, 1, 3]);
@@ -186,8 +188,6 @@ describe("edición de plantillas", () => {
     expect(templateProblems(series)).toEqual([]);
   });
 });
-
-import { applyTemplate, checkManualRun, clearTemplate, defaultMaxHr, hrZoneOf, hrZoneRange, matchPlanned } from "./running";
 
 describe("zonas de frecuencia cardiaca", () => {
   it("estima la FC máxima y calcula rangos", () => {
@@ -370,8 +370,6 @@ describe("runningPRs", () => {
     expect(runningPRs([faster, slower])["5k"]?.id).toBe("fast"); // el orden de entrada no importa
   });
 });
-
-import { applyTemplate as applyTpl, matchPlanned as matchP, prTimeS, runningPRs as prsOf } from "./running";
 
 describe("running — correcciones de la 0.13", () => {
   const run = (id: string, distanceM: number, durationS: number, extra: object = {}) =>

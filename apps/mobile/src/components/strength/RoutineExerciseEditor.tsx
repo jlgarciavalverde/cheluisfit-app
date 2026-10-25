@@ -14,7 +14,7 @@ import {
 } from "@/domain/strength";
 import { useTheme } from "@/theme/ThemeProvider";
 import { radius, space } from "@/theme/tokens";
-import { IconButton } from "../ui/Button";
+import { IconButton , Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { Chip } from "../ui/Chip";
 import { DurationField } from "../ui/DurationField";
@@ -23,7 +23,6 @@ import { SegmentedControl } from "../ui/SegmentedControl";
 import { Stepper } from "../ui/Stepper";
 import { Text } from "../ui/Text";
 import { TextField } from "../ui/TextField";
-import { Button } from "../ui/Button";
 import { ExerciseThumb } from "./MediaStage";
 import { FieldGroup } from "../ui/Section";
 

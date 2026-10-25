@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays, dayLabel, toDateKey } from "./dates";
-import { fmtDuration, fmtInt, fmtKg, fmtKm, fmtPace, fmtRelativeTime } from "./format";
+import { fmtDuration, fmtInt, fmtKg, fmtKm, fmtPace, fmtRelativeTime , parseNum as parseNumEs } from "./format";
 import { gtinVariants, isValidGtin, normalizeGtin13 } from "./gtin";
 import {
   bmr,
@@ -11,6 +11,7 @@ import {
   totalsByMeal,
 } from "./nutrition";
 import type { Entry, Nutrients, Profile } from "./types";
+
 
 const profile: Profile = {
   name: "Ejemplo",
@@ -193,8 +194,6 @@ describe("fechas y formatos", () => {
     expect(fmtRelativeTime(Date.parse("2025-01-01T00:00:00.000Z"), now)).toBe("1 ene");
   });
 });
-
-import { parseNum as parseNumEs } from "./format";
 
 describe("parseNum a la española", () => {
   it("coma o punto decimal, punto de miles, y nada ambiguo", () => {

@@ -39,7 +39,6 @@ export function useAutoSync() {
 
   useEffect(() => {
     if (token) trigger(true);
-     
   }, [token]);
 
   useEffect(() => {
@@ -48,7 +47,6 @@ export function useAutoSync() {
       else if (state === "background") trigger(true);
     });
     return () => sub.remove();
-     
   }, []);
 
   useEffect(() => {
@@ -63,6 +61,5 @@ export function useAutoSync() {
       subs.forEach((unsub) => unsub());
       if (pending.current) clearTimeout(pending.current);
     };
-     
   }, []);
 }

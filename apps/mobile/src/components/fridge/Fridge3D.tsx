@@ -40,7 +40,6 @@ export default function Fridge3D({ fridge, selectedId, onSelect, height = 420 }:
   }, [view]);
 
   // Los manejadores solo leen las refs al moverse el dedo, nunca al pintar.
-  // eslint-disable-next-line react-hooks/refs
   const pan = useMemo(
     () =>
       PanResponder.create({

@@ -1,0 +1,192 @@
+// Sección «Cuenta» de Más: datos de la cuenta, estado de la sincronización, copias de conflicto,
+// perfil social, cerrar sesión e invitaciones (solo admin). Sacada de `(tabs)/mas.tsx`.
+import { router } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { Share, View } from "react-native";
+import { Badge, Button, Callout, Card, Icon, ListGroup, ListRow, Section, Text } from "@/components/ui";
+import { toast } from "@/components/ui/Toast";
+import { api, ApiError } from "@/data/api";
+import { useAuth } from "@/data/authStore";
+import { discardConflictBackup, listConflictBackups, restoreConflictBackup, type ConflictBackup, type SyncKey } from "@/data/blobSync";
+import { syncNow } from "@/data/sync";
+import { space } from "@/theme/tokens";
+
+const KEY_LABEL: Record<SyncKey, string> = {
+  cf_nutrition_v1: "Nutrición",
+  cf_running_v1: "Running",
+  cf_strength_v1: "Fuerza",
+  cf_active_workout_v1: "Entreno en curso",
+};
+
+/**
+ * Copias de lo que había en este móvil cuando la sincronización encontró cambios más nuevos en
+ * la cuenta (ver `syncBlobs` en `blobSync.ts`: gana el servidor). «Recuperar» vuelve a poner esa
+ * copia y se sube en la próxima sincronización; «Descartar» la borra.
+ */
+function ConflictBackups({ refreshKey }: { refreshKey: unknown }) {
+  const [backups, setBackups] = useState<ConflictBackup[]>([]);
+  const reload = useCallback(() => {
+    listConflictBackups().then(setBackups).catch(() => setBackups([]));
+  }, []);
+  useEffect(reload, [reload, refreshKey]);
+  if (backups.length === 0) return null;
+  return (
+    <View style={{ gap: space.sm }} testID="conflict-backups">
+      {backups.map((b) => (
+        <Callout key={b.key} tone="warning" icon="git-compare-outline" dense>
+          {KEY_LABEL[b.key]}: se cargó la versión de tu cuenta y lo que tenías aquí ({new Date(b.savedAt).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })}) quedó guardado aparte.
+          {"\n"}
+          <Text
+            variant="caption"
+            color="brandText"
+            accessibilityRole="button"
+            onPress={() =>
+              restoreConflictBackup(b.key)
+                .then(() => syncNow().catch(() => {}))
+                .then(() => toast("Recuperado lo que tenías en este móvil"))
+                .finally(reload)
+            }
+          >
+            Recuperar lo de este móvil
+          </Text>
+          {"  ·  "}
+          <Text variant="caption" color="muted" accessibilityRole="button" onPress={() => discardConflictBackup(b.key).finally(reload)}>
+            Descartar copia
+          </Text>
+        </Callout>
+      ))}
+    </View>
+  );
+}
+
+function syncLabel(lastSyncedAt: number | null, syncing: boolean): string {
+  if (syncing) return "Sincronizando…";
+  if (!lastSyncedAt) return "Aún no se ha sincronizado";
+  const mins = Math.round((Date.now() - lastSyncedAt) / 60000);
+  if (mins < 1) return "Sincronizado justo ahora";
+  if (mins < 60) return `Sincronizado hace ${mins} min`;
+  const hours = Math.round(mins / 60);
+  return hours < 24 ? `Sincronizado hace ${hours} h` : "Sincronizado hace más de un día";
+}
+
+export function AccountSection() {
+  const user = useAuth((s) => s.user);
+  const token = useAuth((s) => s.token);
+  const logout = useAuth((s) => s.logout);
+  const lastSyncedAt = useAuth((s) => s.lastSyncedAt);
+  const syncing = useAuth((s) => s.syncing);
+  const syncError = useAuth((s) => s.syncError);
+  const syncNotice = useAuth((s) => s.syncNotice);
+  const [invite, setInvite] = useState<{ code: string; expiresAt: number } | null>(null);
+  const [creatingInvite, setCreatingInvite] = useState(false);
+
+  return (
+    <Section kind="overline" title="Cuenta" gap={space.sm}>
+      {user ? (
+        <Card style={{ gap: space.md }} testID="account-card">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+            <Icon name="person-circle" size="lg" color="brandText" />
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyStrong">{user.name}</Text>
+              <Text variant="caption" color="muted">
+                {user.email}
+              </Text>
+            </View>
+            {user.role === "admin" ? <Badge label="Administrador" tone="brand" /> : null}
+          </View>
+          {syncError ? (
+            <Callout tone="warning" icon="cloud-offline-outline" dense>
+              {syncError}
+            </Callout>
+          ) : (
+            <Text variant="caption" color="faint" testID="sync-status" accessibilityLiveRegion="polite">
+              {syncLabel(lastSyncedAt, syncing)}
+            </Text>
+          )}
+          <ConflictBackups refreshKey={`${syncNotice}-${lastSyncedAt}`} />
+          <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
+            <Button testID="sync-now" label="Sincronizar ahora" icon="sync" variant="secondary" size="sm" disabled={syncing} onPress={() => syncNow().then(() => toast("Sincronizado")).catch(() => toast("No se pudo sincronizar"))} />
+            <Button
+              testID="go-social-profile"
+              label="Mi perfil social"
+              icon="person-outline"
+              variant="secondary"
+              size="sm"
+              onPress={async () => {
+                if (!token) return;
+                try {
+                  const { username } = await api.socialMyProfile(token);
+                  router.push({ pathname: "/social/perfil/[username]", params: { username } });
+                } catch {
+                  toast("No se pudo abrir tu perfil social. Prueba otra vez.");
+                }
+              }}
+            />
+            <Button
+              testID="logout"
+              label="Cerrar sesión"
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                logout();
+                toast("Sesión cerrada. Sigues teniendo tus datos en este móvil.");
+              }}
+            />
+          </View>
+          {user.role === "admin" ? (
+            <View style={{ gap: space.sm }}>
+              {invite ? (
+                <Callout icon="key-outline" dense testID="invite-code">
+                  Código: <Text variant="bodyStrong">{invite.code}</Text> · caduca en {Math.max(1, Math.round((invite.expiresAt - Date.now()) / 86400000))} días
+                </Callout>
+              ) : null}
+              <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
+                <Button
+                  testID="create-invite"
+                  label={creatingInvite ? "Generando…" : "Invitar a alguien"}
+                  icon="person-add-outline"
+                  variant="secondary"
+                  size="sm"
+                  disabled={creatingInvite || !token}
+                  onPress={async () => {
+                    if (!token) return;
+                    setCreatingInvite(true);
+                    try {
+                      const created = await api.createInvite(token);
+                      setInvite(created);
+                    } catch (e) {
+                      toast(e instanceof ApiError ? e.message : "No se pudo generar la invitación");
+                    } finally {
+                      setCreatingInvite(false);
+                    }
+                  }}
+                />
+                {invite ? (
+                  <Button
+                    testID="share-invite"
+                    label="Compartir"
+                    icon="share-outline"
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => Share.share({ message: `Únete a CheluisFIT con este código de invitación: ${invite.code}` })}
+                  />
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+        </Card>
+      ) : (
+        <ListGroup>
+          <ListRow
+            icon="cloud-upload-outline"
+            title="Iniciar sesión o crear cuenta"
+            subtitle="Para que tus entrenos y fotos se guarden también en el servidor"
+            chevron
+            testID="go-account"
+            onPress={() => router.push("/cuenta")}
+          />
+        </ListGroup>
+      )}
+    </Section>
+  );
+}

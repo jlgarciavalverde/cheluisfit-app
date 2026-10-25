@@ -4,7 +4,7 @@ import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { LineChart } from "@/components/charts/LineChart";
 import { MediaStage } from "@/components/strength/MediaStage";
-import { Callout, Badge, Card, EmptyState, Section, Text } from "@/components/ui";
+import { Callout, Badge, Card, EmptyState, ListGroup, ListRow, Section, Stat, StatGrid, Text } from "@/components/ui";
 import { loadInstructions } from "@/data/exerciseCatalog";
 import { useExerciseHistory, useLibrary } from "@/data/strengthStore";
 import { shortDayLabel } from "@/domain/dates";
@@ -17,7 +17,6 @@ import {
   SET_TYPE_LABEL,
   type SetLog,
 } from "@/domain/strength";
-import { useTheme } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
 
 function setText(s: SetLog, bodyweight: boolean, duration = false): string {
@@ -27,7 +26,6 @@ function setText(s: SetLog, bodyweight: boolean, duration = false): string {
 }
 
 export default function ExerciseDetailScreen() {
-  const { c } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [steps, setSteps] = useState<string[] | undefined>(undefined);
   useEffect(() => {
@@ -92,40 +90,11 @@ export default function ExerciseDetailScreen() {
         {rec ? (
           <Card style={{ gap: space.md }} testID="records">
             <Text variant="heading">Tus récords</Text>
-            <View style={{ flexDirection: "row", gap: space.lg, flexWrap: "wrap" }}>
-              {weighted ? (
-                <>
-                  <View>
-                    <Text variant="display" tabular>
-                      {fmtKg(rec.maxKg)}
-                      <Text variant="caption" color="muted"> kg</Text>
-                    </Text>
-                    <Text variant="caption" color="muted">
-                      Peso máximo
-                    </Text>
-                  </View>
-                  <View>
-                    <Text variant="display" tabular>
-                      {fmtKg(rec.bestE1rm)}
-                      <Text variant="caption" color="muted"> kg</Text>
-                    </Text>
-                    <Text variant="caption" color="muted">
-                      1RM estimado
-                    </Text>
-                  </View>
-                </>
-              ) : (
-                <View>
-                  <Text variant="display" tabular>
-                    {Math.max(...Object.values(rec.repsAtKg))}
-                    <Text variant="caption" color="muted">{duration ? " s" : " reps"}</Text>
-                  </Text>
-                  <Text variant="caption" color="muted">
-                    Mejor serie
-                  </Text>
-                </View>
-              )}
-            </View>
+            <StatGrid columns={2}>
+              {weighted ? <Stat size="lg" value={fmtKg(rec.maxKg)} unit="kg" label="Peso máximo" /> : null}
+              {weighted ? <Stat size="lg" value={fmtKg(rec.bestE1rm)} unit="kg" label="1RM estimado" /> : null}
+              {!weighted ? <Stat size="lg" value={String(Math.max(...Object.values(rec.repsAtKg)))} unit={duration ? "s" : "reps"} label="Mejor serie" /> : null}
+            </StatGrid>
           </Card>
         ) : (
           <Callout icon="information-circle-outline">
@@ -150,19 +119,15 @@ export default function ExerciseDetailScreen() {
 
         {history.length > 0 ? (
           <Section kind="overline" title="Historial" gap={space.sm}>
-            <Card padded={false}>
+            <ListGroup>
               {history.map((h, i) => (
-                <View
+                <ListRow
                   key={`${h.date}-${i}`}
-                  style={{ padding: space.lg, gap: 4, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: c.border }}
-                >
-                  <Text variant="bodyStrong">{shortDayLabel(h.date)}</Text>
-                  <Text variant="body" color="muted" tabular>
-                    {h.sets.filter((s) => s.done && s.type !== "warmup").map((s) => setText(s, bodyweight, duration)).join("  ·  ")}
-                  </Text>
-                </View>
+                  title={shortDayLabel(h.date)}
+                  subtitle={h.sets.filter((s) => s.done && s.type !== "warmup").map((s) => setText(s, bodyweight, duration)).join("  ·  ")}
+                />
               ))}
-            </Card>
+            </ListGroup>
           </Section>
         ) : null}
         <Text variant="caption" color="faint">

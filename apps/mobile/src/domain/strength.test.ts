@@ -57,7 +57,9 @@ import {
   type Workout,
   workoutExerciseFrom,
   workoutTotals,
-} from "./strength";
+ cleanupForFinish as finishW, commitRepRange, E1RM_MAX_REPS, recordsFrom as recs, replaceExercise as replaceEx, restDecision as restD, routineFromWorkout as fromWorkout, suggestNext as next, type SetLog as Log } from "./strength";
+
+
 
 const ex = (id: string, over: Partial<Exercise> = {}): Exercise => ({
   id,
@@ -742,9 +744,6 @@ describe("récords de un entreno", () => {
     expect(workoutPRs(only, [only])).toEqual([]);
   });
 });
-
-
-import { cleanupForFinish as finishW, commitRepRange, E1RM_MAX_REPS, recordsFrom as recs, replaceExercise as replaceEx, restDecision as restD, routineFromWorkout as fromWorkout, suggestNext as next, type SetLog as Log } from "./strength";
 
 describe("fuerza — correcciones de la 0.13", () => {
   const doneAt = (kg: number, reps: number, iso: string): Log => ({ ...newSet("normal", kg, reps), kg, reps, done: true, completedAt: iso });

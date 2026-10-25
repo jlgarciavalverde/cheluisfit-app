@@ -7,10 +7,10 @@ import { radius, space } from "@/theme/tokens";
 import { Badge } from "../ui/Badge";
 import { PressableCard } from "../ui/Card";
 import { Icon, type IconName } from "../ui/Icon";
-
-export const SOURCE_ICON: Record<Activity["source"], IconName> = { garmin: "watch-outline", strava: "navigate-outline", manual: "create-outline" };
 import { Stat } from "../ui/Stat";
 import { Text } from "../ui/Text";
+
+export const SOURCE_ICON: Record<Activity["source"], IconName> = { garmin: "watch-outline", strava: "navigate-outline", manual: "create-outline" };
 
 export function ActivityCard({
   activity,

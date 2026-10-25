@@ -2,14 +2,13 @@ import { useState } from "react";
 import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { LineChart } from "@/components/charts/LineChart";
-import { Button, Card, Chip, EmptyState, IconButton, Overline, Section, Text, TextField, ChipRow } from "@/components/ui";
+import { Button, Card, Chip, ChipRow, EmptyState, IconButton, ListGroup, ListRow, Section, Stat, Text, TextField } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useNutrition } from "@/data/store";
 import { addDays, dayLabel, shortDayLabel, todayKey } from "@/domain/dates";
 import { fmtNum, parseNum } from "@/domain/format";
 import { isPlausibleMeasurement, latestMeasurement, MEASUREMENT_KINDS, MEASUREMENT_LABEL, normalizeMeasurements } from "@/domain/measurements";
 import type { MeasurementKind } from "@/domain/types";
-import { useTheme } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
 
 const i0 = (d: string, today: string) => {
@@ -18,7 +17,6 @@ const i0 = (d: string, today: string) => {
 };
 
 export default function MeasurementsScreen() {
-  const { c } = useTheme();
   const measurements = useNutrition((s) => s.measurements);
   const addMeasurement = useNutrition((s) => s.addMeasurement);
   const removeMeasurement = useNutrition((s) => s.removeMeasurement);
@@ -53,18 +51,13 @@ export default function MeasurementsScreen() {
         </ChipRow>
 
         <Card style={{ gap: space.md }}>
-          <View>
-            <Overline color="brandText">Última medida</Overline>
-            <Text variant="display" tabular testID="last-measurement">
-              {last ? fmtNum(last.cm) : "—"}
-              <Text variant="body" color="muted"> cm</Text>
-            </Text>
-            {last ? (
-              <Text variant="caption" color="muted">
-                {dayLabel(last.date, today)}
-              </Text>
-            ) : null}
-          </View>
+          <Stat
+            size="xl"
+            value={last ? fmtNum(last.cm) : "—"}
+            unit="cm"
+            label={last ? `Última medida · ${dayLabel(last.date, today)}` : "Última medida"}
+            valueTestID="last-measurement"
+          />
           {chart.length >= 2 ? (
             <LineChart
               values={chart.map((m) => m.cm)}
@@ -107,37 +100,28 @@ export default function MeasurementsScreen() {
 
         {list.length > 0 ? (
           <Section kind="overline" title="Historial" gap={space.sm}>
-            <Card padded={false} testID="measurement-history">
-              {[...list].reverse().map((m, i) => (
-                <View
+            <ListGroup testID="measurement-history">
+              {[...list].reverse().map((m) => (
+                <ListRow
                   key={m.date}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingLeft: space.lg,
-                    borderTopWidth: i > 0 ? 1 : 0,
-                    borderTopColor: c.border,
-                  }}
-                >
-                  <Text variant="body" style={{ flex: 1 }}>
-                    {dayLabel(m.date, today)}
-                  </Text>
-                  <Text variant="bodyStrong" tabular>
-                    {fmtNum(m.cm)} cm
-                  </Text>
-                  <IconButton
-                    icon="trash-outline"
-                    label={`Borrar ${MEASUREMENT_LABEL[kind].toLowerCase()} del ${shortDayLabel(m.date)}`}
-                    color="muted"
-                    size="md"
-                    onPress={() => {
-                      const removed = removeMeasurement(m.date, kind);
-                      if (removed) toast(`${MEASUREMENT_LABEL[kind]} borrada`, { actionLabel: "Deshacer", onAction: () => addMeasurement(removed.date, removed.kind, removed.cm) });
-                    }}
-                  />
-                </View>
+                  title={dayLabel(m.date, today)}
+                  minHeight={52}
+                  value={<Text variant="bodyStrong" tabular>{fmtNum(m.cm)} cm</Text>}
+                  trailing={
+                    <IconButton
+                      icon="trash-outline"
+                      label={`Borrar ${MEASUREMENT_LABEL[kind].toLowerCase()} del ${shortDayLabel(m.date)}`}
+                      color="muted"
+                      size="md"
+                      onPress={() => {
+                        const removed = removeMeasurement(m.date, kind);
+                        if (removed) toast(`${MEASUREMENT_LABEL[kind]} borrada`, { actionLabel: "Deshacer", onAction: () => addMeasurement(removed.date, removed.kind, removed.cm) });
+                      }}
+                    />
+                  }
+                />
               ))}
-            </Card>
+            </ListGroup>
           </Section>
         ) : (
           <EmptyState icon="body-outline" title={`Sin medidas de ${MEASUREMENT_LABEL[kind].toLowerCase()} todavía`} text="Anota tu primera medida arriba." />

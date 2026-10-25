@@ -4,8 +4,6 @@ import { FlatList, View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { SearchStatus } from "@/components/SearchStatus";
 import { countLabel, effectiveQuery } from "@/domain/search";
-
-const EXERCISE_NOUN = ["ejercicio", "ejercicios"] as const;
 import { ExerciseRow } from "@/components/strength/ExerciseRow";
 import { MuscleVolumeCard, RoutineCard, WorkoutCard } from "@/components/strength/cards";
 import { BottomSheet, Button, Card, ConfirmSheet, Chip, ChipRow, EmptyState, CollapsibleSection, IconButton, Overline, ResponsiveGrid, SearchField, Section, SegmentedControl, Text } from "@/components/ui";
@@ -28,6 +26,8 @@ import {
   weeklySetsByMuscle,
 } from "@/domain/strength";
 import { space } from "@/theme/tokens";
+
+const EXERCISE_NOUN = ["ejercicio", "ejercicios"] as const;
 
 type Tab = "train" | "routines" | "exercises" | "history";
 

@@ -6,7 +6,7 @@ import { View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { WorkoutSets } from "@/components/strength/WorkoutSets";
 import { EffortChips } from "@/components/strength/SetsTableSheets";
-import { BottomSheet, BottomSheetForm, Button, Card, Chip, EmptyState, FieldGroup, IconButton, Text, TextField } from "@/components/ui";
+import { BottomSheet, BottomSheetForm, Button, Card, Chip, EmptyState, FieldGroup, IconButton, Text, TextField, Stat, StatGrid } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { useLibrary, useStrength } from "@/data/strengthStore";
@@ -101,33 +101,11 @@ export default function WorkoutDetailScreen() {
       />
       <View style={{ gap: space.lg }}>
         <Card>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.xl }}>
-            <View>
-              <Text variant="display" tabular>
-                {fmtDuration(t.durationS)}
-              </Text>
-              <Text variant="caption" color="muted">
-                duración
-              </Text>
-            </View>
-            <View>
-              <Text variant="display" tabular>
-                {fmtInt(t.volume)}
-                <Text variant="caption" color="muted"> kg</Text>
-              </Text>
-              <Text variant="caption" color="muted">
-                volumen
-              </Text>
-            </View>
-            <View>
-              <Text variant="display" tabular>
-                {t.workingSets}
-              </Text>
-              <Text variant="caption" color="muted">
-                series
-              </Text>
-            </View>
-          </View>
+          <StatGrid>
+            <Stat size="lg" value={fmtDuration(t.durationS)} label="Duración" />
+            <Stat size="lg" value={fmtInt(t.volume)} unit="kg" label="Volumen" />
+            <Stat size="lg" value={String(t.workingSets)} label="Series" />
+          </StatGrid>
         </Card>
         <AnalysisCard
           kind="workout"

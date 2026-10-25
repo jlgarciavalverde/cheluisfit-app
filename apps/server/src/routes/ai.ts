@@ -129,7 +129,7 @@ async function withFallback<T>(cfg: AppConfig, log: FastifyBaseLogger, what: str
   throw new HttpError(502, "La IA no responde ahora mismo, prueba en un rato");
 }
 
-const ANALYZE_PROMPT: Record<"workout" | "run" | "week", string> = {
+const ANALYZE_PROMPT: Record<"workout" | "run" | "week" | "match", string> = {
   workout:
     "Eres el entrenador de fuerza de CheluisFIT. Te doy los datos ya calculados de un entrenamiento " +
     "de gimnasio y de las sesiones anteriores de los mismos ejercicios. Analiza el rendimiento: " +
@@ -138,6 +138,11 @@ const ANALYZE_PROMPT: Record<"workout" | "run" | "week", string> = {
     "Eres el entrenador de running de CheluisFIT. Te doy los datos ya calculados de una carrera o " +
     "caminata y de las semanas anteriores. Analiza ritmo, regularidad por vueltas, frecuencia " +
     "cardiaca y zonas, cumplimiento del plan y la carga respecto a las semanas previas.",
+  match:
+    "Eres el entrenador de fútbol de CheluisFIT (fútbol amateur con amigos). Te doy los datos ya " +
+    "calculados de un partido (minutos, distancia, pulso, resultado, goles, asistencias, posición) y " +
+    "de los partidos anteriores. Analiza la intensidad, el físico respecto a otros partidos y la " +
+    "aportación según la posición; recomienda cómo recuperar y qué trabajar (resistencia, cambios de ritmo).",
   week:
     "Eres el entrenador de CheluisFIT. Te doy el resumen ya calculado de una semana (fuerza, " +
     "running y nutrición) y de las anteriores. Analiza la semana en conjunto: constancia, " +

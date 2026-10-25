@@ -9,7 +9,7 @@ import { useAuth } from "@/data/authStore";
 import { useOnboarding } from "@/data/onboardingStore";
 import { space } from "@/theme/tokens";
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "recover";
 
 /**
  * Iniciar sesión o crear la cuenta. La primera cuenta del servidor pide el código de
@@ -19,6 +19,9 @@ type Mode = "login" | "register";
  */
 export default function AccountScreen() {
   const login = useAuth((s) => s.login);
+  const recover = useAuth((s) => s.recover);
+  const [recoverHow, setRecoverHow] = useState<"code" | "admin">("code");
+  const [resetCode, setResetCode] = useState("");
   const register = useAuth((s) => s.register);
   const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
   const [mode, setMode] = useState<Mode>("login");
@@ -41,6 +44,10 @@ export default function AccountScreen() {
     try {
       if (mode === "login") {
         await login(email.trim().toLowerCase(), password);
+      } else if (mode === "recover") {
+        await recover(
+          recoverHow === "code" ? { code: resetCode.trim().toUpperCase(), password } : { email: email.trim().toLowerCase(), setupCode: setupCode.trim(), password },
+        );
       } else {
         await register({
           name: name.trim(),
@@ -50,7 +57,7 @@ export default function AccountScreen() {
           inviteCode: inviteCode.trim() || undefined,
         });
       }
-      toast(mode === "login" ? "Sesión iniciada" : "Cuenta creada");
+      toast(mode === "login" ? "Sesión iniciada" : mode === "recover" ? "Contraseña cambiada. Ya estás dentro." : "Cuenta creada");
       dismiss();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "No se pudo conectar con el servidor. Comprueba tu conexión.");
@@ -59,7 +66,10 @@ export default function AccountScreen() {
     }
   };
 
-  const canSubmit = email.trim() !== "" && password !== "" && (mode === "login" || name.trim() !== "");
+  const canSubmit =
+    mode === "recover"
+      ? password.length >= 8 && (recoverHow === "code" ? resetCode.trim().length === 8 : email.trim() !== "" && setupCode.trim() !== "")
+      : email.trim() !== "" && password !== "" && (mode === "login" || name.trim() !== "");
 
   return (
     <Screen
@@ -67,24 +77,42 @@ export default function AccountScreen() {
       testID="screen-cuenta"
       footer={
         <View style={{ gap: space.sm }}>
-          <Button testID="account-submit" label={mode === "login" ? "Entrar" : "Crear cuenta"} size="lg" fullWidth disabled={!canSubmit || busy} onPress={submit} />
+          <Button testID="account-submit" label={mode === "login" ? "Entrar" : mode === "recover" ? "Cambiar contraseña y entrar" : "Crear cuenta"} size="lg" fullWidth disabled={!canSubmit || busy} onPress={submit} />
           {onboarding === "1" ? <Button testID="skip-account" label="Seguir sin cuenta" variant="ghost" fullWidth onPress={dismiss} /> : null}
         </View>
       }
     >
       <ScreenHeader title="Cuenta" subtitle="Para que tus entrenos y fotos se guarden en el servidor" back onBack={dismiss} />
       <View style={{ gap: space.lg }}>
-        <SegmentedControl<Mode>
-          value={mode}
-          onChange={(m) => {
-            setMode(m);
-            setError(null);
-          }}
-          options={[
-            { value: "login", label: "Entrar" },
-            { value: "register", label: "Crear cuenta" },
-          ]}
-        />
+        {mode === "recover" ? (
+          <>
+            <Callout tone="neutral" icon="key-outline" testID="recover-help">
+              Pídele a quien administra CheluisFIT un código para restablecer tu acceso (lo genera en Más → Cuenta). Si eres tú quien administra, usa el código de configuración del servidor.
+            </Callout>
+            <SegmentedControl<"code" | "admin">
+              role="radio"
+              label="Cómo recuperas el acceso"
+              value={recoverHow}
+              onChange={setRecoverHow}
+              options={[
+                { value: "code", label: "Tengo un código" },
+                { value: "admin", label: "Soy el administrador" },
+              ]}
+            />
+          </>
+        ) : (
+          <SegmentedControl<Mode>
+            value={mode}
+            onChange={(m) => {
+              setMode(m);
+              setError(null);
+            }}
+            options={[
+              { value: "login", label: "Entrar" },
+              { value: "register", label: "Crear cuenta" },
+            ]}
+          />
+        )}
 
         {error ? (
           <Callout tone="danger" icon="alert-circle" testID="account-error">
@@ -93,16 +121,34 @@ export default function AccountScreen() {
         ) : null}
 
         {mode === "register" ? <TextField testID="account-name" label="Tu nombre" value={name} onChangeText={setName} placeholder="Chelu" /> : null}
-        <TextField testID="account-email" label="Correo" value={email} onChangeText={setEmail} placeholder="tu@correo.es" keyboardType="email-address" autoCapitalize="none" />
+        {mode === "recover" && recoverHow === "code" ? (
+          <TextField testID="reset-code" label="Código de recuperación" value={resetCode} onChangeText={setResetCode} placeholder="8 letras y números" autoCapitalize="characters" maxLength={8} />
+        ) : (
+          <TextField testID="account-email" label="Correo" value={email} onChangeText={setEmail} placeholder="tu@correo.es" keyboardType="email-address" autoCapitalize="none" />
+        )}
+        {mode === "recover" && recoverHow === "admin" ? (
+          <TextField testID="recover-setup" label="Código de configuración" value={setupCode} onChangeText={setSetupCode} hint="El SETUP_CODE del .env del servidor" autoCapitalize="none" />
+        ) : null}
         <TextField
           testID="account-password"
-          label="Contraseña"
+          label={mode === "recover" ? "Contraseña nueva" : "Contraseña"}
           value={password}
           onChangeText={setPassword}
-          placeholder={mode === "register" ? "Mínimo 8 caracteres" : undefined}
+          placeholder={mode !== "login" ? "Mínimo 8 caracteres" : undefined}
           secureTextEntry
           autoCapitalize="none"
         />
+
+        {mode === "login" ? (
+          <Button testID="forgot-password" label="¿Has olvidado la contraseña?" variant="ghost" size="sm" onPress={() => {
+              setMode("recover");
+              setError(null);
+            }} />
+        ) : null}
+        {mode === "recover" ? <Button label="Volver a entrar con contraseña" variant="ghost" size="sm" onPress={() => {
+              setMode("login");
+              setError(null);
+            }} /> : null}
 
         {mode === "register" ? (
           <FieldGroup label="Cómo entras" hint="La primera cuenta del servidor usa el código de configuración; el resto, una invitación de quien ya esté dentro.">

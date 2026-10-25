@@ -3,9 +3,9 @@
 import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Share, View } from "react-native";
-import { Badge, Button, Callout, Card, Icon, ListGroup, ListRow, Section, Text } from "@/components/ui";
+import { ActionList, ActionRow, Badge, BottomSheet, Button, Callout, Card, Icon, ListGroup, ListRow, Section, Text } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
-import { api, ApiError } from "@/data/api";
+import { api, ApiError, type ApiUser } from "@/data/api";
 import { useAuth } from "@/data/authStore";
 import { discardConflictBackup, listConflictBackups, restoreConflictBackup, type ConflictBackup, type SyncKey } from "@/data/blobSync";
 import { syncNow } from "@/data/sync";
@@ -69,6 +69,79 @@ function syncLabel(lastSyncedAt: number | null, syncing: boolean): string {
   return hours < 24 ? `Sincronizado hace ${hours} h` : "Sincronizado hace más de un día";
 }
 
+/**
+ * Recuperar el acceso de alguien del hogar que olvidó su contraseña (solo admin): se genera un
+ * código de un solo uso (24 h) y se le pasa por WhatsApp; lo usa en «¿Has olvidado la contraseña?».
+ */
+function ResetAccessSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const token = useAuth((s) => s.token);
+  const me = useAuth((s) => s.user);
+  const [members, setMembers] = useState<ApiUser[] | null>(null);
+  const [code, setCode] = useState<{ code: string; name: string } | null>(null);
+
+  useEffect(() => {
+    if (!visible || !token) return;
+    let alive = true;
+    api
+      .householdMembers(token)
+      .then((r) => alive && setMembers(r.members.filter((m) => m.id !== me?.id)))
+      .catch(() => alive && setMembers([]));
+    return () => {
+      alive = false;
+    };
+  }, [visible, token, me?.id]);
+
+  const generate = async (m: ApiUser) => {
+    if (!token) return;
+    try {
+      const r = await api.createReset(token, m.id);
+      setCode({ code: r.code, name: r.name });
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "No se pudo generar el código");
+    }
+  };
+
+  const close = () => {
+    setCode(null);
+    onClose();
+  };
+
+  return (
+    <BottomSheet visible={visible} onClose={close} title="Restablecer un acceso" subtitle="Para quien ha olvidado su contraseña">
+      {code ? (
+        <View style={{ gap: space.md }}>
+          <Callout icon="key-outline" testID="reset-code-generated">
+            Código para {code.name}: <Text variant="bodyStrong">{code.code}</Text> · vale 24 horas y una sola vez.
+          </Callout>
+          <Button
+            label="Compartir"
+            icon="share-outline"
+            onPress={() =>
+              Share.share({
+                message: `Tu código para recuperar el acceso a CheluisFIT: ${code.code}\nEn la app: Entrar → «¿Has olvidado la contraseña?» → «Tengo un código». Vale 24 horas.`,
+              })
+            }
+          />
+        </View>
+      ) : members === null ? (
+        <Text variant="body" color="muted">
+          Cargando…
+        </Text>
+      ) : members.length === 0 ? (
+        <Text variant="body" color="muted">
+          No hay nadie más en el hogar.
+        </Text>
+      ) : (
+        <ActionList>
+          {members.map((m) => (
+            <ActionRow key={m.id} testID={`reset-${m.email}`} icon="person-outline" label={m.name} hint={m.email} onPress={() => generate(m)} />
+          ))}
+        </ActionList>
+      )}
+    </BottomSheet>
+  );
+}
+
 export function AccountSection() {
   const user = useAuth((s) => s.user);
   const token = useAuth((s) => s.token);
@@ -79,6 +152,7 @@ export function AccountSection() {
   const syncNotice = useAuth((s) => s.syncNotice);
   const [invite, setInvite] = useState<{ code: string; expiresAt: number } | null>(null);
   const [creatingInvite, setCreatingInvite] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
 
   return (
     <Section kind="overline" title="Cuenta" gap={space.sm}>
@@ -173,9 +247,11 @@ export function AccountSection() {
                     onPress={() => Share.share({ message: `Únete a CheluisFIT con este código de invitación: ${invite.code}` })}
                   />
                 ) : null}
+                <Button testID="open-reset-access" label="Restablecer un acceso" icon="key-outline" variant="secondary" size="sm" onPress={() => setResetOpen(true)} />
               </View>
             </View>
           ) : null}
+          <ResetAccessSheet visible={resetOpen} onClose={() => setResetOpen(false)} />
         </Card>
       ) : (
         <ListGroup>

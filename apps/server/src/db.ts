@@ -191,6 +191,17 @@ const MIGRATIONS: Migration[] = [
     read_at INTEGER
   );
   CREATE INDEX idx_notifications_user ON notifications(user_id, created_at DESC);
+  `,  // 0.21: recuperar el acceso sin correo (como Compra en Familia): un admin genera un código de un
+  // solo uso, 24 h, para otra persona del hogar.
+  `
+  CREATE TABLE password_resets (
+    code TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER
+  );
   `,
 ];
 

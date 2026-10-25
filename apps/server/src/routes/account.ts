@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { bearerToken, createSession, deleteSession, hashPassword, hashToken, requireUser, safeEqual, verifyPassword } from "../auth";
 import { all, get, insertProfileFor, run, tx } from "../db";
 import { HttpError, toUser } from "../http";
-import { ChangePasswordInput, LoginInput, RegisterInput, UpdateMeInput } from "../schemas";
+import { AdminRecoveryInput, ChangePasswordInput, LoginInput, RegisterInput, ResetPasswordInput, UpdateMeInput } from "../schemas";
 import type { Register } from "./ctx";
 
 const INVITE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -132,6 +132,80 @@ export const registerAccount: Register = (app, { db, cfg }) => {
       run(db, "DELETE FROM sessions WHERE user_id = ? AND token_hash != ?", user.id, hashToken(current ?? ""));
     });
     return { ok: true };
+  });
+
+  // ---------- Recuperar el acceso (sin correo: lo genera un administrador) ----------
+  // Mismo diseño que Compra en Familia: el admin genera un código de un solo uso (24 h) para otra
+  // persona del hogar y se lo pasa por WhatsApp; con él se pone una contraseña nueva. Para el
+  // propio admin, el `SETUP_CODE` del `.env` del servidor hace de llave maestra.
+  const RESET_TTL_MS = 24 * 3600 * 1000;
+
+  app.get("/api/household/members", async (req) => {
+    const user = requireUser(db, req.headers.authorization);
+    if (user.role !== "admin") throw new HttpError(403, "Solo el administrador puede ver esto");
+    return { members: all(db, "SELECT * FROM users WHERE household_id = ? AND removed_at IS NULL ORDER BY created_at", user.householdId).map(toUser) };
+  });
+
+  app.post<{ Params: { id: string } }>("/api/household/members/:id/reset", async (req, reply) => {
+    const user = requireUser(db, req.headers.authorization);
+    if (user.role !== "admin") throw new HttpError(403, "Solo el administrador puede restablecer accesos");
+    const target = get(db, "SELECT * FROM users WHERE id = ? AND household_id = ? AND removed_at IS NULL", req.params.id, user.householdId);
+    if (!target) throw new HttpError(404, "Esa persona no está en el hogar");
+    if (target.id === user.id) throw new HttpError(400, "Para cambiar tu contraseña usa «Datos de la cuenta»");
+    const code = newInviteCode();
+    const now = Date.now();
+    tx(db, () => {
+      run(db, "DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL", target.id);
+      run(db, "INSERT INTO password_resets (code, user_id, created_by, created_at, expires_at) VALUES (?,?,?,?,?)", code, target.id, user.id, now, now + RESET_TTL_MS);
+    });
+    reply.code(201);
+    return { code, name: target.name, expiresAt: now + RESET_TTL_MS };
+  });
+
+  app.get<{ Params: { code: string } }>("/api/reset/:code", authLimit, async (req) => {
+    const row = get(
+      db,
+      `SELECT u.name FROM password_resets r JOIN users u ON u.id = r.user_id
+       WHERE r.code = ? AND r.used_at IS NULL AND r.expires_at > ? AND u.removed_at IS NULL`,
+      req.params.code.toUpperCase(),
+      Date.now(),
+    );
+    return { valid: !!row, name: row?.name ?? null };
+  });
+
+  /** Contraseña nueva con el código; cierra todas las sesiones y abre una nueva en este móvil. */
+  app.post("/api/auth/reset", authLimit, async (req) => {
+    const b = ResetPasswordInput.parse(req.body);
+    const now = Date.now();
+    const r = get(
+      db,
+      `SELECT r.code, u.* FROM password_resets r JOIN users u ON u.id = r.user_id
+       WHERE r.code = ? AND r.used_at IS NULL AND r.expires_at > ? AND u.removed_at IS NULL`,
+      b.code,
+      now,
+    );
+    if (!r) throw new HttpError(400, "El código no es válido o ha caducado");
+    const hash = await hashPassword(b.password);
+    tx(db, () => {
+      run(db, "UPDATE users SET password_hash = ? WHERE id = ?", hash, r.id);
+      run(db, "UPDATE password_resets SET used_at = ? WHERE code = ?", now, r.code);
+      run(db, "DELETE FROM sessions WHERE user_id = ?", r.id);
+    });
+    return { token: createSession(db, r.id, req.headers["user-agent"]), user: toUser(r) };
+  });
+
+  /** El administrador sin acceso: su correo + el `SETUP_CODE` del servidor. Solo cuentas admin. */
+  app.post("/api/auth/admin-recovery", authLimit, async (req) => {
+    const b = AdminRecoveryInput.parse(req.body);
+    const u = get(db, "SELECT * FROM users WHERE email = ? AND role = 'admin' AND removed_at IS NULL", b.email);
+    // Mismo error para «no existe» y «código mal»: no se puede sondear qué correos son admin.
+    if (!u || !cfg.setupCode || !safeEqual(b.setupCode, cfg.setupCode)) throw new HttpError(403, "El correo o el código de configuración no son correctos");
+    const hash = await hashPassword(b.password);
+    tx(db, () => {
+      run(db, "UPDATE users SET password_hash = ? WHERE id = ?", hash, u.id);
+      run(db, "DELETE FROM sessions WHERE user_id = ?", u.id);
+    });
+    return { token: createSession(db, u.id, req.headers["user-agent"]), user: toUser(u) };
   });
 
   /** Invitar a alguien (amigos/familia) — solo el admin. */

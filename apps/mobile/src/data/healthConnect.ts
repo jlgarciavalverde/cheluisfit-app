@@ -44,15 +44,16 @@ async function callNative<T>(label: string, fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Qué tipos de sesión de Health Connect importamos, y a qué tipo de `Activity` mapean.
- * Fútbol (`ExerciseType.SOCCER`) y el resto de tipos no están aquí a propósito — no hay
- * pestaña de Fútbol todavía; cuando la haya, se añade su propia entrada.
+ * Qué tipos de sesión de Health Connect importamos: carreras y caminatas van a `activities`;
+ * fútbol (desde la 0.21) a `matches` (`domain/football.ts`) — lo separa `markSynced()`. El resto
+ * de tipos se ignora a propósito.
  */
-const TYPE_MAP: Partial<Record<number, Activity["type"]>> = {
+const TYPE_MAP: Partial<Record<number, ImportedActivity["type"]>> = {
   [ExerciseType.RUNNING]: "run",
   [ExerciseType.RUNNING_TREADMILL]: "run",
   [ExerciseType.WALKING]: "walk",
   [ExerciseType.HIKING]: "walk",
+  [ExerciseType.SOCCER]: "football",
 };
 
 /**
@@ -156,7 +157,8 @@ async function sessionAggregates(startTime: string, endTime: string, origin?: st
   };
 }
 
-export type ImportedActivity = Omit<Activity, "id">;
+/** Sesión importada: una actividad de running/caminata o un partido de fútbol (`type: "football"`). */
+export type ImportedActivity = Omit<Activity, "id" | "type"> & { type: Activity["type"] | "football" };
 
 const PAUSE_TYPES = new Set<number>([ExerciseSegmentType?.PAUSE, ExerciseSegmentType?.REST].filter((x): x is number => typeof x === "number"));
 const ms = (iso: string) => new Date(iso).getTime();
@@ -225,7 +227,7 @@ export async function importNewActivities(sinceISO: string | null, opts: { known
         date: toDateKey(new Date(r.startTime)),
         type,
         source: "garmin",
-        title: r.title?.trim() || (type === "run" ? "Carrera" : "Caminata"),
+        title: r.title?.trim() || (type === "run" ? "Carrera" : type === "walk" ? "Caminata" : "Partido de fútbol"),
         distanceM: agg.distanceM,
         durationS,
         avgHr: agg.avgHr,

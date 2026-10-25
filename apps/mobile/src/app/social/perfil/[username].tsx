@@ -300,11 +300,20 @@ export default function ProfileScreen() {
       <BottomSheet visible={menu} onClose={() => setMenu(false)} title={profile.displayName} subtitle={`@${profile.username}`}>
         <ActionList>
           {followState === "accepted" ? (
-            <ActionRow icon="person-remove-outline" label="Dejar de seguir" onPress={() => (setMenu(false), setConfirm("unfollow"))} />
+            <ActionRow icon="person-remove-outline" label="Dejar de seguir" onPress={() => {
+                setMenu(false);
+                setConfirm("unfollow");
+              }} />
           ) : null}
-          {followState === "pending" ? <ActionRow icon="close-circle-outline" label="Cancelar la solicitud" onPress={() => (setMenu(false), setConfirm("cancel"))} /> : null}
+          {followState === "pending" ? <ActionRow icon="close-circle-outline" label="Cancelar la solicitud" onPress={() => {
+                setMenu(false);
+                setConfirm("cancel");
+              }} /> : null}
           {followsMe ? (
-            <ActionRow testID="remove-follower" icon="remove-circle-outline" label="Quitar de mis seguidores" hint="Dejará de ver tu perfil si es privado" tone="danger" onPress={() => (setMenu(false), setConfirm("remove"))} />
+            <ActionRow testID="remove-follower" icon="remove-circle-outline" label="Quitar de mis seguidores" hint="Dejará de ver tu perfil si es privado" tone="danger" onPress={() => {
+                setMenu(false);
+                setConfirm("remove");
+              }} />
           ) : null}
         </ActionList>
       </BottomSheet>

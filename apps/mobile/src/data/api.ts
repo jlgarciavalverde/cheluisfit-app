@@ -1,7 +1,7 @@
 // Cliente del servidor (`apps/server`). Autenticación por token (ver `authStore.ts`) y
 // sincronización de los blobs de cada tienda local (ver `sync.ts`). `EXPO_PUBLIC_API_URL`
 // permite apuntar a otra URL en desarrollo; en producción usa el subdominio real.
-import type { ImportedActivity } from "./healthConnect";
+import type { Activity } from "@/domain/running";
 import type { FridgeScan } from "@/domain/fridge";
 import type { AiAnalysis, AnalysisKind } from "@/domain/analysis";
 
@@ -267,7 +267,7 @@ export const api = {
   stravaSync: (token: string, since: string | null) =>
     // `until` (desde la 0.11): hasta dónde avanzar `lastStravaSync` si el servidor cortó por el tope.
     // El servidor pide la ruta de cada actividad una a una: bastante más de 8 s con varias.
-    request<{ activities: ImportedActivity[]; until?: string }>("/api/strava/sync", { method: "POST", token, body: { since }, timeoutMs: AI_VISION_TIMEOUT_MS }),
+    request<{ activities: Omit<Activity, "id">[]; until?: string }>("/api/strava/sync", { method: "POST", token, body: { since }, timeoutMs: AI_VISION_TIMEOUT_MS }),
   stravaDisconnect: (token: string) => request<{ ok: boolean }>("/api/strava/disconnect", { method: "DELETE", token }),
 
   aiChat: (token: string, section: AiSection, messages: AiMessage[], context: string) =>
@@ -399,6 +399,12 @@ export const api = {
   },
   socialUnreadCount: (token: string) => request<{ count: number }>("/api/social/notifications/unread-count", { token }),
   socialMarkRead: (token: string, upTo?: number) => request<{ ok: boolean }>("/api/social/notifications/read", { method: "POST", token, body: upTo ? { upTo } : {} }),
+
+  resetPassword: (code: string, password: string) => request<{ token: string; user: ApiUser }>("/api/auth/reset", { method: "POST", body: { code, password } }),
+  adminRecovery: (email: string, setupCode: string, password: string) =>
+    request<{ token: string; user: ApiUser }>("/api/auth/admin-recovery", { method: "POST", body: { email, setupCode, password } }),
+  householdMembers: (token: string) => request<{ members: ApiUser[] }>("/api/household/members", { token }),
+  createReset: (token: string, userId: string) => request<{ code: string; name: string; expiresAt: number }>(`/api/household/members/${userId}/reset`, { method: "POST", token }),
 
   updateMe: (token: string, patch: { name?: string; email?: string }) => request<{ user: { id: string; name: string; email: string; role: "admin" | "member" } }>("/api/me", { method: "PUT", token, body: patch }),
   changePassword: (token: string, current: string, next: string) => request<{ ok: boolean }>("/api/me/password", { method: "PUT", token, body: { current, next } }),

@@ -41,6 +41,10 @@ interface AuthState {
   /** Aviso informativo (no un error): p. ej. que ganó la versión del servidor en un conflicto. */
   syncNotice: string | null;
   login: (email: string, password: string) => Promise<void>;
+  /** Contraseña nueva con un código del admin (o el `SETUP_CODE`, si eres admin): entra igual que `login`. */
+  recover: (input: { code: string; password: string } | { email: string; setupCode: string; password: string }) => Promise<void>;
+  /** Lo común de entrar (login o recuperar el acceso): el servidor manda y lo local se sustituye. */
+  adoptSession: (session: { token: string; user: ApiUser }) => Promise<void>;
   register: (input: { name: string; email: string; password: string; setupCode?: string; householdName?: string; inviteCode?: string }) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -59,7 +63,12 @@ export const useAuth = create<AuthState>()(
       syncNotice: null,
 
       login: async (email, password) => {
-        const { token, user } = await api.login(email, password);
+        await get().adoptSession(await api.login(email, password));
+      },
+      recover: async (input) => {
+        await get().adoptSession(await ("code" in input ? api.resetPassword(input.code, input.password) : api.adminRecovery(input.email, input.setupCode, input.password)));
+      },
+      adoptSession: async ({ token, user }) => {
         const { household } = await api.me(token);
         // `syncing` entra en el MISMO `set()` que `token`, para que no exista un instante donde
         // haya sesión pero `useAutoSync` no sepa todavía que hay una carga en marcha (si no,

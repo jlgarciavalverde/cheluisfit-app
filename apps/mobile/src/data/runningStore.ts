@@ -8,6 +8,7 @@ import { bmr } from "@/domain/nutrition";
 import { useNutrition } from "./store";
 import { api } from "./api";
 import { importNewActivities } from "./healthConnect";
+import { mergeImportedMatches, type Match } from "@/domain/football";
 import { cancelWorkoutReminder, resyncWorkoutReminders, scheduleWorkoutReminder } from "@/lib/reminders";
 import { SEED_TEMPLATES, seedActivities, seedPlanned } from "./runningSeed";
 
@@ -38,6 +39,12 @@ export interface RunningState {
   duplicateTemplate: (id: string) => Template | undefined;
   addActivity: (a: Omit<Activity, "id">) => string;
   deleteActivity: (id: string) => Activity | undefined;
+  /** Partidos de fútbol (`domain/football.ts`): del Garmin (Health Connect `SOCCER`) o a mano. */
+  matches: Match[];
+  addMatch: (m: Omit<Match, "id">) => string;
+  updateMatch: (id: string, patch: Partial<Omit<Match, "id">>) => void;
+  deleteMatch: (id: string) => Match | undefined;
+  restoreMatch: (m: Match) => void;
   restoreActivity: (a: Activity) => void;
   /** Vincula la sesión con una plantilla (guarda su copia) o la desvincula con `null`. */
   linkTemplate: (activityId: string, templateId: string | null) => void;
@@ -61,6 +68,7 @@ export interface RunningState {
 const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 const empty = () => ({
+  matches: [] as Match[],
   templates: [] as Template[],
   activities: [] as Activity[],
   planned: [] as Planned[],
@@ -72,6 +80,7 @@ const empty = () => ({
 });
 
 const initial = () => ({
+  matches: [] as Match[],
   templates: SEED_TEMPLATES,
   activities: seedActivities(),
   planned: seedPlanned(),
@@ -161,6 +170,24 @@ export const useRunning = create<RunningState>()(
         }
         return found;
       },
+      addMatch: (m) => {
+        const id = `match-${uid()}`;
+        set((s) => ({ matches: [{ ...m, id }, ...s.matches] }));
+        return id;
+      },
+      updateMatch: (id, patch) => set((s) => ({ matches: s.matches.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
+      deleteMatch: (id) => {
+        const found = get().matches.find((m) => m.id === id);
+        if (found) {
+          set((s) => ({
+            matches: s.matches.filter((m) => m.id !== id),
+            // Un partido del reloj borrado a propósito no vuelve con el solape de 7 días del sync.
+            dismissedExternalIds: found.externalId ? [...s.dismissedExternalIds, found.externalId].slice(-MAX_DISMISSED) : s.dismissedExternalIds,
+          }));
+        }
+        return found;
+      },
+      restoreMatch: (m) => set((s) => ({ matches: [m, ...s.matches], dismissedExternalIds: s.dismissedExternalIds.filter((x) => x !== m.externalId) })),
       restoreActivity: (a) => {
         set((s) => ({ activities: [a, ...s.activities], dismissedExternalIds: s.dismissedExternalIds.filter((x) => x !== a.externalId) }));
         get().relink();
@@ -202,13 +229,22 @@ export const useRunning = create<RunningState>()(
         const lastMs = last ? new Date(last).getTime() : NaN;
         const since = Number.isFinite(lastMs) ? new Date(lastMs - 7 * 86_400_000).toISOString() : null;
         const cur = get();
-        const knownIds = new Set([...cur.activities.map((a) => a.externalId).filter((x): x is string => !!x), ...cur.dismissedExternalIds]);
+        const knownIds = new Set(
+          [...cur.activities.map((a) => a.externalId), ...cur.matches.map((m) => m.externalId), ...cur.dismissedExternalIds].filter((x): x is string => !!x),
+        );
         const imported = await importNewActivities(since, { knownIds, bmrKcalPerDay: bmr(useNutrition.getState().profile) });
-        const { activities, addedCount } = mergeImportedActivities(get().activities, imported, () => `act-${uid()}`, get().dismissedExternalIds);
+        // Carreras y caminatas a `activities`; el fútbol a `matches` (no cuenta como running).
+        const runs = imported.filter((a): a is Omit<Activity, "id"> => a.type !== "football");
+        const games = imported
+          .filter((a) => a.type === "football")
+          .map((a) => ({ date: a.date, source: "garmin" as const, title: a.title, durationS: a.durationS, distanceM: a.distanceM, avgHr: a.avgHr, maxHr: a.maxHr, kcal: a.kcal, externalId: a.externalId }));
+        const { activities, addedCount } = mergeImportedActivities(get().activities, runs, () => `act-${uid()}`, get().dismissedExternalIds);
+        const { matches, addedCount: addedMatches } = mergeImportedMatches(get().matches, games, () => `match-${uid()}`, get().dismissedExternalIds);
         if (addedCount > 0) set({ activities });
+        if (addedMatches > 0) set({ matches });
         set({ lastSync: new Date().toISOString() });
         get().relink();
-        return addedCount;
+        return addedCount + addedMatches;
       },
       setSource: (source) => set({ source }),
       setStravaConnected: (stravaConnected) => set({ stravaConnected }),
@@ -228,10 +264,11 @@ export const useRunning = create<RunningState>()(
       storage: guardedJSONStorage(),
       // Tras cargar (arranque, o datos bajados de la cuenta): los avisos viven en el sistema, no en el blob.
       onRehydrateStorage: guardRehydrate<RunningState>("cf_running_v1", (s) => resyncReminders(s)),
-      version: 6,
+      version: 7,
       // Campos nuevos se rellenan desde `empty()`, nunca desde `initial()`: si no, una migración
       // metería actividades o plantillas de ejemplo entre los datos reales.
       // v5 → v6: llega `dismissedExternalIds` y se compactan los recorridos ya guardados.
+      // v6 → v7: llegan `matches` (fútbol).
       migrate: (persisted) => {
         const s = { ...empty(), ...(persisted as object) } as RunningState;
         return { ...s, activities: s.activities.map((a) => (a.route ? { ...a, route: compactRoute(a.route) } : a)) };

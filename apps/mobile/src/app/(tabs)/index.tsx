@@ -1,3 +1,4 @@
+import { scoreText } from "@/domain/football";
 import { weekKey } from "@/domain/analysis";
 import { router } from "expo-router";
 import { useMemo } from "react";
@@ -7,7 +8,7 @@ import { UpdateCallout } from "@/components/UpdateCallout";
 import { KcalRing, MacroBars } from "@/components/nutrition/DaySummary";
 import { SOURCE_ICON } from "@/components/running/ActivityCard";
 import { formatMinutes } from "@/components/running/TemplateCard";
-import { Callout, Badge, Button, Card, Icon, Overline, PressableCard, Text } from "@/components/ui";
+import { Badge, Button, Card, Icon, Overline, PressableCard, Text } from "@/components/ui";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { useAuth } from "@/data/authStore";
 import { useRunning } from "@/data/runningStore";
@@ -57,6 +58,8 @@ export default function HoyScreen() {
     [planned, today],
   );
   const upcomingTpl = upcoming ? templates.find((t) => t.id === upcoming.templateId) : undefined;
+  const matches = useRunning((s) => s.matches);
+  const lastMatch = useMemo(() => [...matches].sort((a, b) => b.date.localeCompare(a.date))[0], [matches]);
   const last = useMemo(() => [...activities].sort((a, b) => b.date.localeCompare(a.date))[0], [activities]);
   const streak = useMemo(() => {
     const dates = [...entries.map((e) => e.date), ...activities.map((a) => a.date), ...gymWorkouts.map((w) => w.date)];
@@ -205,9 +208,17 @@ export default function HoyScreen() {
           {weekAnalysis ? weekAnalysis.result.headline : "Cómo va tu semana en fuerza, running y comida, con el análisis de la IA."}
         </Text>
       </PressableCard>
-      <Callout icon="football-outline" title="Fútbol" dense>
-        Llegará en una próxima fase del diseño.
-      </Callout>
+      <PressableCard accessibilityLabel="Fútbol" testID="hoy-futbol" onPress={() => router.push("/futbol")} style={{ gap: space.sm }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <Icon name="football-outline" size="sm" color="brandText" />
+          <Overline color="muted">Fútbol</Overline>
+        </View>
+        <Text variant="body" numberOfLines={2}>
+          {lastMatch
+            ? `Último: ${lastMatch.title}, ${dayLabel(lastMatch.date, today).toLowerCase()}${scoreText(lastMatch) ? ` · ${scoreText(lastMatch)}` : ""}${lastMatch.goals ? ` · ${lastMatch.goals} ${lastMatch.goals === 1 ? "gol" : "goles"}` : ""}`
+            : "Registra tus partidos (o tráelos del Garmin) y apunta resultado y goles."}
+        </Text>
+      </PressableCard>
     </View>
   );
 

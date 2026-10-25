@@ -91,15 +91,19 @@ describe("importNewActivities", () => {
     nativeMock.aggregateRecord.mockRejectedValue(new Error("sin datos"));
   }
 
-  it("ignora tipos de ejercicio no soportados (fútbol y otros) sin romper la importación", async () => {
+  it("importa el fútbol como «football» (va a `matches`) e ignora los tipos no soportados", async () => {
     const { importNewActivities } = await freshModule();
     mockEmptyAggregates();
     nativeMock.readRecords.mockResolvedValueOnce({
-      records: [baseSession({ exerciseType: nativeMock.ExerciseType.SOCCER }), baseSession({ exerciseType: nativeMock.ExerciseType.RUNNING, metadata: { id: "hc-2" } })],
+      records: [
+        baseSession({ exerciseType: nativeMock.ExerciseType.SOCCER, title: "" }),
+        baseSession({ exerciseType: nativeMock.ExerciseType.RUNNING, metadata: { id: "hc-2" } }),
+        baseSession({ exerciseType: 999, metadata: { id: "hc-3" } }),
+      ],
     });
     const out = await importNewActivities(null);
-    expect(out).toHaveLength(1);
-    expect(out[0].type).toBe("run");
+    expect(out.map((a) => a.type)).toEqual(["football", "run"]);
+    expect(out[0].title).toBe("Partido de fútbol");
   });
 
   it("descarta sesiones con duración cero o negativa", async () => {

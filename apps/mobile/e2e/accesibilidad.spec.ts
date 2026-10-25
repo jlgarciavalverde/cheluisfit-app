@@ -18,6 +18,8 @@ const ROUTES = [
   "/medidas",
   "/nevera",
   "/informe",
+  "/futbol",
+  "/futbol/nuevo",
   "/cuenta-datos",
   "/social/editar-perfil",
   "/social/avisos",

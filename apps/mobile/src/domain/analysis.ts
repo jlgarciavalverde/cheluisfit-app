@@ -42,7 +42,7 @@ export interface StoredAnalysis {
   result: AiAnalysis;
 }
 
-export type AnalysisKind = "workout" | "run" | "week";
+export type AnalysisKind = "workout" | "run" | "week" | "match";
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 

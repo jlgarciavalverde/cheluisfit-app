@@ -569,6 +569,45 @@ describe("IA con foto (nevera y escaneo de producto)", () => {
   });
 });
 
+describe("recuperar el acceso", () => {
+  async function member(name: string, email: string) {
+    const inv = await call("POST", "/api/household/invites", token);
+    const r = await call("POST", "/api/auth/register", undefined, { name, email, password: "supersecreta1", inviteCode: inv.body.code });
+    return { token: r.body.token as string, id: r.body.user.id as string };
+  }
+
+  it("el admin genera un código de un solo uso y con él se pone una contraseña nueva (y se cierran las sesiones)", async () => {
+    const tere = await member("Tere", "tere-rec@casa.es");
+    expect((await call("POST", `/api/household/members/${tere.id}/reset`, tere.token)).status).toBe(403); // no admin
+    const gen = await call("POST", `/api/household/members/${tere.id}/reset`, token);
+    expect(gen.status).toBe(201);
+    expect((await call("GET", `/api/reset/${gen.body.code.toLowerCase()}`)).body).toEqual({ valid: true, name: "Tere" });
+    const r = await call("POST", "/api/auth/reset", undefined, { code: gen.body.code, password: "nuevaclave1" });
+    expect(r.status).toBe(200);
+    expect(r.body.user.email).toBe("tere-rec@casa.es");
+    expect((await call("GET", "/api/me", tere.token)).status).toBe(401); // sesión vieja cerrada
+    expect((await call("POST", "/api/auth/login", undefined, { email: "tere-rec@casa.es", password: "nuevaclave1" })).status).toBe(200);
+    expect((await call("POST", "/api/auth/reset", undefined, { code: gen.body.code, password: "otraclave11" })).status).toBe(400); // un solo uso
+  });
+
+  it("el admin no puede generarse un código a sí mismo; la lista de miembros es solo para admin", async () => {
+    const me = await call("GET", "/api/me", token);
+    expect((await call("POST", `/api/household/members/${me.body.user.id}/reset`, token)).status).toBe(400);
+    const ulises = await member("Ulises", "ulises-rec@casa.es");
+    expect((await call("GET", "/api/household/members", ulises.token)).status).toBe(403);
+    expect((await call("GET", "/api/household/members", token)).body.members.some((m: { email: string }) => m.email === "ulises-rec@casa.es")).toBe(true);
+  });
+
+  it("el admin se recupera con su correo y el SETUP_CODE; con un miembro o un código malo, mismo 403", async () => {
+    await member("Vera", "vera-rec@casa.es");
+    expect((await call("POST", "/api/auth/admin-recovery", undefined, { email: "vera-rec@casa.es", setupCode: SETUP, password: "nuevaclave1" })).status).toBe(403);
+    expect((await call("POST", "/api/auth/admin-recovery", undefined, { email: "chelu@casa.es", setupCode: "malo", password: "nuevaclave1" })).status).toBe(403);
+    const ok = await call("POST", "/api/auth/admin-recovery", undefined, { email: "chelu@casa.es", setupCode: SETUP, password: chelu.password });
+    expect(ok.status).toBe(200);
+    token = ok.body.token; // las sesiones anteriores se cerraron: el resto de tests sigue con la nueva
+  });
+});
+
 describe("red social", () => {
   async function registerViaInvite(name: string, email: string) {
     const inv = await call("POST", "/api/household/invites", token);

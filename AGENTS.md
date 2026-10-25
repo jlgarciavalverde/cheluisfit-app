@@ -27,9 +27,14 @@ limita cada blob a 3 MB (413 claro: en Android una entrada de AsyncStorage falla
 Qué hace el móvil con un conflicto: ver «Cliente» más abajo. Si algún día hace falta edición
 simultánea de verdad desde varios móviles, ahí sí tocaría un outbox por operación como en Compra.
 
-**Cuentas**: mismo esquema que Compra (`households`/`users`/`sessions`/`invites`), pero sin
-recuperación de contraseña ni gestión de sesiones múltiples (se puede añadir copiando el
-patrón de Compra si hace falta). Primera cuenta = `SETUP_CODE` del `.env`; el resto, invitación
+**Cuentas**: mismo esquema que Compra (`households`/`users`/`sessions`/`invites`), sin gestión
+de sesiones múltiples. **Recuperar el acceso (0.21, mismo diseño que Compra, sin correo)**: un admin
+genera en Más → Cuenta → «Restablecer un acceso» un código de un solo uso (24 h,
+`password_resets`) para otra persona del hogar; ella lo usa en «¿Has olvidado la contraseña?» →
+«Tengo un código» (`POST /api/auth/reset`: contraseña nueva, cierra todas sus sesiones y entra).
+El propio admin se recupera con su correo + el `SETUP_CODE` del `.env` (`POST
+/api/auth/admin-recovery`, solo cuentas admin, mismo 403 para correo inexistente o código malo).
+En el móvil, `login` y `recover` comparten `adoptSession()` (`authStore.ts`): el servidor manda. Primera cuenta = `SETUP_CODE` del `.env`; el resto, invitación
 de un admin (`POST /api/household/invites`). **Cuenta real ya creada en producción** con el
 correo del propietario — no se reinicia ni se genera otra por iniciativa propia.
 **Aceptar** una invitación ya funciona de punta a punta (campo en `app/cuenta.tsx`); **generar**
@@ -214,6 +219,16 @@ si había datos suficientes (`hasEnoughTdeeData`); cambiar objetivo o actividad 
 propuesta pendiente. `calcTargets` tiene **suelo** (≥ metabolismo basal y ≥ 1.500/1.200 kcal en
 déficit) y calcula proteína y grasa sobre el **peso a IMC 25** si el IMC es mayor. Si la IA
 cambia solo las kcal, se recalculan los hidratos (`carbsFor`) y los límites (`limitsFor`).
+
+**Fútbol (0.21)** (`domain/football.ts`, `app/futbol/`): partidos en `useRunning().matches`
+(mismo blob `cf_running_v1`, versión 7) — **aparte de `activities`** a propósito, para no tocar
+todo lo que trata las actividades como running (ritmos, PRs, plantillas, semanas, IA de
+running). Health Connect importa `ExerciseType.SOCCER` como `type: "football"` y `markSynced()`
+lo separa a `matches` (`mergeImportedMatches`, mismo dedupe por `externalId` y la misma lista de
+borrados). Se registran también a mano (`futbol/nuevo.tsx`). Lo que el reloj no sabe (resultado,
+goles, asistencias, posición, formato, esfuerzo) se apunta en la ficha (`MatchInfoFields`).
+Resumen del mes/año (`footballSummary`), análisis con IA (`kind: "match"`,
+`matchAnalysisData`). No es una pestaña (ya hay seis en 360 dp): se entra desde Hoy y Más.
 
 **PRs de running** (`domain/running.ts`'s `runningPRs()`): mismo espíritu que los récords de
 Fuerza pero mucho más simple (una carrera tiene una sola distancia/duración, no varias series) —

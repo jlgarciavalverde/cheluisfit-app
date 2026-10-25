@@ -141,9 +141,9 @@ export default function MasScreen() {
           </Card>
         </Section>
 
-        <Section kind="overline" title="Próximamente" gap={space.sm}>
+        <Section kind="overline" title="Deportes" gap={space.sm}>
           <ListGroup>
-            <ListRow icon="football-outline" title="Fútbol" subtitle="Partidos, minutos, goles y esfuerzo" chevron onPress={() => toast("Fútbol se diseñará más adelante")} />
+            <ListRow icon="football-outline" title="Fútbol" subtitle="Partidos, goles, asistencias y estado físico" chevron testID="go-futbol" onPress={() => router.push("/futbol")} />
           </ListGroup>
         </Section>
 

@@ -49,7 +49,7 @@ export const AiChatInput = z.object({
 });
 
 export const AiAnalyzeInput = z.object({
-  kind: z.enum(["workout", "run", "week"]),
+  kind: z.enum(["workout", "run", "week", "match"]),
   // Texto con los datos ya calculados por el móvil (`domain/analysis.ts`).
   data: z
     .string()
@@ -131,4 +131,16 @@ export const ChangePasswordInput = z.object({
 export const ReadNotificationsInput = z.object({
   /** Marca como leídas las de antes de este instante (ms); sin él, todas. */
   upTo: z.number().int().positive().optional(),
+});
+
+export const ResetPasswordInput = z.object({
+  code: z.string().trim().toUpperCase().length(8, "El código tiene 8 caracteres"),
+  password: z.string().min(8, "Mínimo 8 caracteres").max(200),
+});
+
+/** El admin que se queda fuera: correo + `SETUP_CODE` del servidor (solo para cuentas admin). */
+export const AdminRecoveryInput = z.object({
+  email: z.string().trim().toLowerCase().email("Correo no válido"),
+  setupCode: z.string().min(1, "Falta el código de configuración"),
+  password: z.string().min(8, "Mínimo 8 caracteres").max(200),
 });

@@ -1,5 +1,7 @@
 # Arquitectura
 
+[← Documentación](README.md) · [README del proyecto](../README.md)
+
 CheluisFIT es un monorepo pnpm con dos aplicaciones. Las decisiones finas y las trampas conocidas están en [`AGENTS.md`](../AGENTS.md); aquí va la visión de conjunto con diagramas.
 
 | Paquete | Qué es |

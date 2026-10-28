@@ -4,161 +4,117 @@
 [![Versión 0.21.0](https://img.shields.io/badge/versión-0.21.0-orange)](https://github.com/jlgarciavalverde/cheluisfit-app/releases)
 ![Expo 57](https://img.shields.io/badge/expo-57-000020?logo=expo&logoColor=white)
 ![Android APK](https://img.shields.io/badge/android-APK-3DDC84?logo=android&logoColor=white)
-[![Web en vivo](https://img.shields.io/badge/web-en%20vivo-redgarverde.com-brightgreen)](https://cheluisfit.redgarverde.com)
+[![Web en vivo](https://img.shields.io/badge/web-en%20vivo-brightgreen)](https://cheluisfit.redgarverde.com)
 
-App de fitness para uso personal y de amigos y familia: **nutrición**, **running** y **fuerza**.
-Android nativo (APK propio, sin tiendas) y **web**, con datos **en el dispositivo primero** y
-sincronización opcional con un **servidor propio**.
+**Una app de fitness completa (nutrición, running y fuerza) para mí, mis amigos y mi familia.** Android nativo con APK propio (sin tiendas) y web, con los datos **primero en el dispositivo** y sincronización opcional con un servidor propio.
 
 | Hoy | Nutrición | Running | Fuerza |
 |---|---|---|---|
 | ![Hoy](docs/capturas/hoy.png) | ![Nutrición](docs/capturas/nutricion.png) | ![Running](docs/capturas/running.png) | ![Fuerza](docs/capturas/fuerza.png) |
 
+<details>
+<summary><b>Más capturas</b> (nevera, sesión, ejercicio, fútbol y escritorio)</summary>
+
 | Nevera | Sesión de running | Ejercicio | Fútbol |
 |---|---|---|---|
 | ![Nevera](docs/capturas/nevera.png) | ![Sesión de running](docs/capturas/sesion-running.png) | ![Ficha de ejercicio](docs/capturas/ejercicio.png) | ![Fútbol](docs/capturas/futbol.png) |
 
-**Escritorio** (la misma app en el navegador, con barra lateral):
-
 ![Hoy en escritorio](docs/capturas/hoy-escritorio.png)
 
-*Capturas reales de la app (versión 0.21.0, datos de ejemplo), en tema oscuro y claro.*
+</details>
+
+*Capturas reales de la versión 0.21.0 con los datos de ejemplo.*
 
 ## Qué hace
 
-- **Nutrición** — diario de comidas con kcal y macros (proteína/hidratos/grasa/fibra), objetivo
-  calculado para ti con **TDEE adaptativo** que corrige el objetivo según cómo responde tu peso
-  real (siempre con tu confirmación), registro de peso y medidas, escáner de **código de barras**
-  con **Open Food Facts en vivo**, buscador de texto ampliado con **USDA FoodData Central** en
-  vivo (+600.000 alimentos, más los platos caseros españoles precargados) y escaneo de producto
-  **por foto con IA**, y **nevera** con vista 3D: la IA reconoce qué hay y dónde está.
-- **Running** — registro de carreras y caminatas, plantillas de entrenamiento (series, rodajes,
-  tiradas), plan semanal, récords personales (mejor ritmo, marcas 5K/10K/media), gráficas de
-  progreso e importación real desde **Garmin vía Android Health Connect** o **Strava** (OAuth2,
-  con recorrido GPS).
-- **Fuerza** — rutinas con progresión de cargas, biblioteca de **~3.000 ejercicios** con foto o
-  GIF animado, entreno en curso con temporizador de descanso y notificaciones, récords (1RM),
-  historial y "repetir el último entreno".
-- **Asistente de IA** — burbuja flotante (Gemini, con Groq de respaldo) que conoce tu contexto
-  real (lo que comiste, tus carreras, tus entrenos) y **propone** cambios que tú confirmas antes
-  de que se apliquen — nunca escribe nada por su cuenta.
-- **Fútbol** — partidos importados de Health Connect o apuntados a mano, con resultado, goles,
-  asistencias y resumen del mes.
-- **Análisis con IA** al terminar un entreno o abrir una carrera reciente, e informe semanal.
-- **Modo social** — perfiles públicos o privados, seguir gente, feed con posts vinculados a una
-  carrera o entreno real (con snapshot, no tus datos), comentarios y likes.
-- **Local-first de verdad** — funciona sin cuenta y sin red; con cuenta, sincroniza los datos
-  entre dispositivos con control de versiones optimista (y copia local en caso de conflicto).
-  Exporta tus datos en JSON cuando quieras.
+| | |
+|---|---|
+| 🥗 **Nutrición** | Diario con kcal y macros, objetivo con **TDEE adaptativo** (se corrige según tu peso real, siempre con tu confirmación), peso y medidas, escáner de código de barras con **Open Food Facts**, buscador con **USDA** (+600.000 alimentos y platos caseros españoles), alta por **foto con IA** y **nevera 3D**. |
+| 🏃 **Running** | Carreras y caminatas, plantillas (series, rodajes, tiradas), plan semanal, récords (5K, 10K, media) y gráficas. Importación desde **Garmin** (Android Health Connect) o **Strava** (con recorrido GPS). |
+| 🏋️ **Fuerza** | Rutinas con progresión de cargas, **~2.500 ejercicios** con foto o GIF, entreno en curso con descanso y notificación, 1RM y «repetir el último entreno». |
+| ⚽ **Fútbol** | Partidos desde Health Connect o a mano, con resultado, goles, asistencias y resumen del mes. |
+| 🤖 **IA** | Asistente con tu contexto real (Gemini, con Groq de respaldo) que **propone** y tú confirmas, análisis al terminar un entreno o una carrera e informe semanal. |
+| 👥 **Social** | Perfiles públicos o privados, seguir, feed con posts de una carrera o un entreno (con una copia, no tus datos), likes, comentarios y avisos. |
+| 📴 **Local primero** | Funciona sin cuenta y sin red. Con cuenta, sincroniza entre dispositivos con versionado optimista. Exportación a JSON. |
 
-## Cómo está hecho
+## Cómo funciona
 
 ```mermaid
 flowchart LR
-    subgraph Móvil["apps/mobile — Expo 57 / React Native (APK + web)"]
-        UI["Pantallas<br/>(Expo Router)"] --> Domain["Lógica pura<br/>domain/ (testeada)"]
-        Domain --> Stores["Tiendas zustand<br/>persistidas en AsyncStorage<br/>¡local-first!"]
-        UI --> Catalog["Catálogo ~3.000 ejercicios<br/>con foto/GIF"]
-    end
-    subgraph Servidor["apps/server — Fastify 5 / node:sqlite (opcional)"]
-        Blobs["Sincronización de blobs<br/>(versionado optimista, 409)"]
-        Cuentas["Cuentas e invitaciones"]
-        IA["Proxy de IA<br/>(Gemini + Groq)"]
-        Social["Modo social<br/>(perfiles, feed, fotos)"]
-    end
-    Stores <-- "HTTPS · blobs completos" --> Blobs
-    UI --> IA
-    UI --> Social
-    UI --> Cuentas
-    OFF["Open Food Facts<br/>(código de barras)"] --> Móvil
-    USDA["USDA FoodData Central<br/>(buscador)"] --> Móvil
-    HC["Garmin → Android<br/>Health Connect"] --> Móvil
-    StravaAPI["Strava API<br/>(OAuth2)"] --> Servidor
+  subgraph movil["apps/mobile · Expo 57 (APK + web)"]
+    ui["Pantallas<br/>Expo Router"] --> domain["domain/<br/>lógica pura testeada"]
+    ui --> stores["Tiendas zustand<br/>en AsyncStorage"]
+  end
+  subgraph srv["apps/server · Fastify 5 + SQLite (opcional)"]
+    blobs["Sincronización<br/>de blobs"]
+    ia["Proxy de IA"]
+    social["Social y cuentas"]
+  end
+  stores <-- "blobs con versión" --> blobs
+  ui --> ia & social
+  off[(Open Food Facts)] & usda[(USDA)] & hc["Garmin → Health Connect"] --> movil
+  strava[(Strava)] --> srv
 ```
 
-Diseño con diagramas: [arquitectura](docs/arquitectura.md) (contexto, local primero, servidor,
-despliegue, modelo de datos), [requisitos](docs/requisitos.md) y [flujos](docs/flujos.md)
-(sincronización, escáner, Garmin, IA, feed).
+Todo vive en el móvil. El servidor guarda una copia de cada tienda como un bloque entero, sin interpretarla, y las claves de IA nunca salen de él. Detalle en [arquitectura](docs/arquitectura.md) y [flujos](docs/flujos.md).
 
-Decisiones de arquitectura y dominio (por qué blobs enteros en vez de tablas normalizadas, cómo
-se resuelven conflictos, límites de la IA, la integración con Garmin/Strava pieza a pieza…):
-[`AGENTS.md`](AGENTS.md) — la fuente única de verdad para cualquier agente que toque el código.
+| Pieza | Tecnología |
+|---|---|
+| App | Expo 57 / React Native 0.86, Expo Router, zustand, three.js (nevera 3D) |
+| Servidor | Fastify 5, Node 22 (`node:sqlite`), Zod, Vercel AI SDK (Gemini + Groq) |
+| Integraciones | Open Food Facts, USDA FoodData Central, Android Health Connect, Strava OAuth2 |
+| Calidad | vitest (~300 tests de lógica + servidor), Playwright + axe (~156 e2e) con capturas de referencia, ESLint |
 
-## Arrancar
+## Empezar
+
+Requisitos: Node 22 y pnpm.
 
 ```bash
-export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 pnpm install
 cd apps/mobile
-npx expo start --web            # navegador: http://localhost:8081
-npx expo start --android        # emulador Android (instala Expo Go solo)
-pnpm typecheck && pnpm test     # comprobaciones (tipos + lógica, ~300 tests)
-pnpm e2e                        # exporta la web y pasa Playwright + axe (~156 pruebas)
-cd ../server && pnpm test       # tests del servidor
+npx expo start --web          # navegador: http://localhost:8081
+npx expo start --android      # emulador Android
 ```
 
-La búsqueda en vivo de alimentos de **USDA** necesita una clave gratuita de
-[api.data.gov](https://api.data.gov) en la variable `EXPO_PUBLIC_USDA_API_KEY` (sin ella la
-búsqueda local y Open Food Facts funcionan igual; la app avisa de que falta la clave).
+| Comando (en `apps/mobile`) | Qué hace |
+|---|---|
+| `pnpm typecheck && pnpm test` | Tipos y lógica |
+| `pnpm e2e` | Exporta la web y pasa Playwright + axe |
+| `cd ../server && pnpm test` | Tests del servidor |
 
-**Expo Go ya no basta** para probar la app completa: las notificaciones de fin de descanso y
-Health Connect (Garmin) son módulos nativos que solo existen en un APK/*development build*
-(`npx expo run:android`). Expo Go sigue sirviendo para iterar rápido en el resto de pantallas.
+Para Health Connect y las notificaciones hace falta un APK o *development build* (`npx expo run:android`): Expo Go no basta. Más en [operaciones](docs/operaciones.md).
 
 ## Estructura
 
 ```
 apps/mobile/src
   app/         rutas (Expo Router): (tabs)/ = Hoy, Nutrición, Running, Fuerza, Social, Más
-  components/  ui/ = sistema de diseño; nutrition/, running/, charts/, ai/, social/
-  domain/      lógica pura sin React Native (objetivos, nutrientes, GTIN, running, TDEE)
-  data/        estado local (zustand+AsyncStorage) + datos de ejemplo + clientes de red
-               (Open Food Facts, USDA, Health Connect/Garmin, servidor, Strava)
+  components/  ui/ = sistema de diseño; nutrition/, running/, fridge/, ai/, social/…
+  domain/      lógica pura sin React Native (objetivos, TDEE, nutrientes, GTIN, running, análisis)
+  data/        tiendas (zustand + AsyncStorage), datos de ejemplo y clientes de red
 apps/server/src
-  db.ts, auth.ts, app.ts, server.ts, routes/  Fastify + node:sqlite: cuentas, sincronización
-                                              de blobs, fotos, proxy de IA y modo social
+  db.ts, auth.ts, app.ts, routes/   cuentas, blobs, fotos, IA, Strava y social
+tools/         despliegue y copias externas
 ```
 
-Las decisiones de diseño del modo social están en `docs/plan-social.md`.
+## Documentación
 
-## Copias de seguridad y cómo restaurar
+Índice completo en [docs/](docs/README.md).
 
-- **Automáticas**: el servidor hace una copia consistente (`VACUUM INTO`) cada 6 h en
-  `~/servicios/cheluisfit/data/backups/cheluisfit-AAAA-MM-DD.db` (una por día, 14 días) y
-  `tools/deploy.mjs` hace otra, `pre-<versión>-<ms>.db`, justo antes de cada actualización.
-- **Restaurar una copia** (en el VPS):
-  ```sh
-  cd ~/servicios/cheluisfit
-  docker compose stop
-  cp data/cheluisfit.db data/cheluisfit.db.antes-de-restaurar   # por si acaso
-  cp data/backups/<la copia>.db data/cheluisfit.db
-  rm -f data/cheluisfit.db-wal data/cheluisfit.db-shm             # si no, SQLite reaplicaría cambios posteriores
-  docker compose up -d
-  ```
-- **Volver a la versión anterior** si una actualización sale mal (el despliegue ya lo intenta solo
-  si `/health` no responde): `sed -i "s|image: cheluisfit:.*|image: cheluisfit:<anterior>|" docker-compose.yml`,
-  lo mismo con `APP_VERSION=` en `.env`, y `docker compose up -d` (las imágenes anteriores siguen
-  cargadas: `docker images cheluisfit`).
-- **Copias cruzadas** (`node tools/backup-offsite.mjs`, y solas al final de cada despliegue):
-  las copias de la base de datos bajan al Mac (`~/Copias/cheluisfit/db/`), y el código con todo su
-  historial (`git bundle`; restaurar: `git clone repo-<fecha>.bundle cheluisfit`) y la clave de
-  firma del APK suben al VPS (`~/backups/cheluisfit/`). La **contraseña** de la clave
-  (`~/.android-keystores/cheluisfit.properties`) no sale del Mac: guárdala en tu gestor de
-  contraseñas. Sin clave ni contraseña, las actualizaciones dejarían de instalarse encima.
+| Para… | Lee |
+|---|---|
+| Entender qué hace | [Requisitos](docs/requisitos.md) · [Flujos](docs/flujos.md) |
+| Entender cómo está hecho | [Arquitectura](docs/arquitectura.md) · [Diseño del modo social](docs/plan-social.md) |
+| Desplegar, copias y restaurar | [Operaciones](docs/operaciones.md) |
+| Programar en el repo | [AGENTS.md](AGENTS.md): decisiones finas y trampas conocidas |
 
 ## Próximos pasos
 
-- **Verificación en dispositivo real** de lo último (0.18–0.21: nevera 3D, análisis con IA, perfil
-  público, avisos, recuperar contraseña y fútbol): instalar el APK desde `/app.apk?v=<versión>`
-  (**con el `?v=`, nunca a secas**: Cloudflare cachea `.apk` en su borde ~4 h) y probarlo con
-  datos y cuentas reales.
-- **Notificaciones push sociales**: hoy los avisos van a una bandeja dentro de la app, sin push.
-- **Vídeos propios de ejercicios de Fuerza** (hoy son fotos y GIF de catálogos abiertos).
-- **Ruta GPS sin Strava**: importar el GPX exportado de Garmin Connect (Health Connect no
-  comparte el recorrido de Garmin).
+- Probar en un móvil real lo de las versiones 0.18–0.21 (nevera 3D, análisis con IA, perfil público, avisos, recuperar contraseña y fútbol).
+- Avisos push del modo social (hoy van a una bandeja dentro de la app).
+- Vídeos propios de los ejercicios de fuerza.
+- Recorrido GPS sin Strava, importando el GPX que exporta Garmin Connect.
 
 ## Licencia
 
-Código bajo [MIT](LICENSE) © José Luis García Valverde. Los datos de terceros (Open Food
-Facts, USDA, catálogo de ejercicios, GIF) conservan sus propias licencias: ver
-[NOTICE.md](NOTICE.md).
+Código bajo [MIT](LICENSE) © José Luis García Valverde. Los datos de terceros (Open Food Facts, USDA, catálogo de ejercicios y GIF) conservan sus propias licencias: ver [NOTICE.md](NOTICE.md).

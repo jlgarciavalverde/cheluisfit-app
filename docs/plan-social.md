@@ -1,5 +1,7 @@
 # CheluisFIT — plan social (feed, entrenos compartidos, follows, fotos, comentarios, likes)
 
+[← Documentación](README.md) · [README del proyecto](../README.md)
+
 **Estado: construido y desplegado (2026-09-23).** Las 5 fases de la sección 6 están hechas:
 servidor (`routes/social.ts`, migración con backfill), dominio (`domain/socialSnapshot.ts`),
 cliente (`data/api.ts`, `data/socialStore.ts`, pestaña `(tabs)/social.tsx`, `app/social/*`),

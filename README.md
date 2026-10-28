@@ -1,5 +1,11 @@
 # CheluisFIT
 
+[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE)
+[![Versión 0.21.0](https://img.shields.io/badge/versión-0.21.0-orange)](https://github.com/jlgarciavalverde/cheluisfit-app/releases)
+![Expo 57](https://img.shields.io/badge/expo-57-000020?logo=expo&logoColor=white)
+![Android APK](https://img.shields.io/badge/android-APK-3DDC84?logo=android&logoColor=white)
+[![Web en vivo](https://img.shields.io/badge/web-en%20vivo-redgarverde.com-brightgreen)](https://cheluisfit.redgarverde.com)
+
 App de fitness para uso personal y de amigos y familia: **nutrición**, **running** y **fuerza**.
 Android nativo (APK propio, sin tiendas) y **web**, con datos **en el dispositivo primero** y
 sincronización opcional con un **servidor propio**.
@@ -8,7 +14,15 @@ sincronización opcional con un **servidor propio**.
 |---|---|---|---|
 | ![Hoy](docs/capturas/hoy.png) | ![Nutrición](docs/capturas/nutricion.png) | ![Running](docs/capturas/running.png) | ![Fuerza](docs/capturas/fuerza.png) |
 
-*Capturas reales de la app (datos de ejemplo), tema oscuro.*
+| Nevera | Sesión de running | Ejercicio | Fútbol |
+|---|---|---|---|
+| ![Nevera](docs/capturas/nevera.png) | ![Sesión de running](docs/capturas/sesion-running.png) | ![Ficha de ejercicio](docs/capturas/ejercicio.png) | ![Fútbol](docs/capturas/futbol.png) |
+
+**Escritorio** (la misma app en el navegador, con barra lateral):
+
+![Hoy en escritorio](docs/capturas/hoy-escritorio.png)
+
+*Capturas reales de la app (versión 0.21.0, datos de ejemplo), en tema oscuro y claro.*
 
 ## Qué hace
 
@@ -17,7 +31,7 @@ sincronización opcional con un **servidor propio**.
   real (siempre con tu confirmación), registro de peso y medidas, escáner de **código de barras**
   con **Open Food Facts en vivo**, buscador de texto ampliado con **USDA FoodData Central** en
   vivo (+600.000 alimentos, más los platos caseros españoles precargados) y escaneo de producto
-  **por foto con IA**.
+  **por foto con IA**, y **nevera** con vista 3D: la IA reconoce qué hay y dónde está.
 - **Running** — registro de carreras y caminatas, plantillas de entrenamiento (series, rodajes,
   tiradas), plan semanal, récords personales (mejor ritmo, marcas 5K/10K/media), gráficas de
   progreso e importación real desde **Garmin vía Android Health Connect** o **Strava** (OAuth2,
@@ -28,6 +42,9 @@ sincronización opcional con un **servidor propio**.
 - **Asistente de IA** — burbuja flotante (Gemini, con Groq de respaldo) que conoce tu contexto
   real (lo que comiste, tus carreras, tus entrenos) y **propone** cambios que tú confirmas antes
   de que se apliquen — nunca escribe nada por su cuenta.
+- **Fútbol** — partidos importados de Health Connect o apuntados a mano, con resultado, goles,
+  asistencias y resumen del mes.
+- **Análisis con IA** al terminar un entreno o abrir una carrera reciente, e informe semanal.
 - **Modo social** — perfiles públicos o privados, seguir gente, feed con posts vinculados a una
   carrera o entreno real (con snapshot, no tus datos), comentarios y likes.
 - **Local-first de verdad** — funciona sin cuenta y sin red; con cuenta, sincroniza los datos
@@ -58,6 +75,10 @@ flowchart LR
     HC["Garmin → Android<br/>Health Connect"] --> Móvil
     StravaAPI["Strava API<br/>(OAuth2)"] --> Servidor
 ```
+
+Diseño con diagramas: [arquitectura](docs/arquitectura.md) (contexto, local primero, servidor,
+despliegue, modelo de datos), [requisitos](docs/requisitos.md) y [flujos](docs/flujos.md)
+(sincronización, escáner, Garmin, IA, feed).
 
 Decisiones de arquitectura y dominio (por qué blobs enteros en vez de tablas normalizadas, cómo
 se resuelven conflictos, límites de la IA, la integración con Garmin/Strava pieza a pieza…):
@@ -127,26 +148,14 @@ Las decisiones de diseño del modo social están en `docs/plan-social.md`.
 
 ## Próximos pasos
 
-De lo más cercano a lo más lejano:
-
-- **Activar el asistente de IA en producción**: el código ya está desplegable, pero hace falta
-  crear las claves gratuitas (`aistudio.google.com/apikey` para Gemini, `console.groq.com/keys`
-  para Groq — ninguna pide tarjeta) y añadirlas a mano al `.env` del VPS
-  (`GEMINI_API_KEY`/`GROQ_API_KEY`, ver `AGENTS.md`); sin al menos una, la burbuja no responde.
-- **Verificación en dispositivo real** (solo la puede hacer quien tenga el móvil y el reloj):
-  instalar el APK desde `/app.apk?v=<versión>` (**con el `?v=`, nunca a secas** — Cloudflare
-  cachea `.apk` en su borde ~4h ignorando la cabecera del servidor; `node tools/deploy.mjs`
-  imprime la URL correcta al final de cada despliegue), confirmar en Garmin Connect → Ajustes →
-  Health Connect → «Escribir» → Sesiones de ejercicio activado, probar una sincronización real,
-  escanear un producto de supermercado de verdad, probar el asistente de IA con datos reales y
-  probar lo social con dos cuentas de verdad (follow, publicar, comentar, dar like, perfil privado).
-- **Notificaciones sociales** (fuera de v1 a propósito, ver `docs/plan-social.md`): «X te ha
-  seguido/comentado» necesitaría push o un cron, ninguno existe hoy.
-- **Fútbol**: pestaña sin diseñar todavía. Health Connect ya expone `ExerciseType.SOCCER`,
-  ignorado a propósito en la importación de Garmin hasta que exista.
-- **Vídeos propios de ejercicios de Fuerza** (hoy son fotos de free-exercise-db).
-- **Recuperación de contraseña**: el esquema de cuentas no la tiene, a diferencia de Compra en
-  Familia — se puede añadir copiando su patrón si hace falta.
+- **Verificación en dispositivo real** de lo último (0.18–0.21: nevera 3D, análisis con IA, perfil
+  público, avisos, recuperar contraseña y fútbol): instalar el APK desde `/app.apk?v=<versión>`
+  (**con el `?v=`, nunca a secas**: Cloudflare cachea `.apk` en su borde ~4 h) y probarlo con
+  datos y cuentas reales.
+- **Notificaciones push sociales**: hoy los avisos van a una bandeja dentro de la app, sin push.
+- **Vídeos propios de ejercicios de Fuerza** (hoy son fotos y GIF de catálogos abiertos).
+- **Ruta GPS sin Strava**: importar el GPX exportado de Garmin Connect (Health Connect no
+  comparte el recorrido de Garmin).
 
 ## Licencia
 

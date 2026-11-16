@@ -2,7 +2,7 @@ import { useKeepAwake } from "expo-keep-awake";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { takeCreatedExercise } from "@/lib/createdExercise";
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ExerciseCircles } from "@/components/strength/ExerciseCircles";
 import { FinishWorkoutSheet } from "@/components/strength/FinishWorkoutSheet";
@@ -12,13 +12,15 @@ import { ExercisePicker } from "@/components/strength/ExercisePicker";
 import { ExerciseThumb, MediaStage } from "@/components/strength/MediaStage";
 import { RestBar } from "@/components/strength/RestBar";
 import { SetsTable } from "@/components/strength/SetsTable";
+import { SuggestionCard } from "@/components/strength/SuggestionCard";
 import { WorkoutExerciseMenu } from "@/components/strength/WorkoutExerciseMenu";
+import { WorkoutHeader } from "@/components/strength/WorkoutHeader";
 import { FullScreenModal } from "@/components/FullScreenModal";
-import { Callout, BottomSheetForm, Button, ConfirmSheet, Card, EmptyState, Icon, IconButton, Text, TextField } from "@/components/ui";
+import { BottomSheetForm, Button, Callout, ConfirmSheet, EmptyState, IconButton, Text, TextField } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { useLibrary, useStrength } from "@/data/strengthStore";
-import { fmtDuration, fmtKg } from "@/domain/format";
+import { fmtDuration } from "@/domain/format";
 import {
   EQUIPMENT_LABEL,
   ghostsFor,
@@ -33,7 +35,6 @@ import {
   supersetLabel,
   warmupSets,
 } from "@/domain/strength";
-import { useNow } from "@/lib/useNow";
 import { useBreakpoint, useTheme } from "@/theme/ThemeProvider";
 import { radius, space } from "@/theme/tokens";
 
@@ -51,23 +52,6 @@ function useKeyboardOpen(): boolean {
   return open;
 }
 
-function suggestionTitle(s: import("@/domain/strength").Suggestion, kind: string): string {
-  const first = s.perSet[0];
-  const weighted = kind === "weight_reps" || (first?.kg ?? 0) > 0;
-  const goal = kind === "duration" ? `${first?.reps ?? 0} s` : `${first?.reps ?? 0} reps`;
-  switch (s.action) {
-    case "increase":
-      return weighted ? `Sube a ${fmtKg(first?.kg ?? 0)} kg` : `Sube a ${goal}`;
-    case "deload":
-      return `Baja a ${fmtKg(first?.kg ?? 0)} kg`;
-    case "hold":
-      return weighted ? `Mantén ${fmtKg(first?.kg ?? 0)} kg` : `Objetivo: ${goal}`;
-    default:
-      return "Primera vez";
-  }
-}
-
-const ICON = { start: "sparkles", increase: "arrow-up-circle", hold: "remove-circle", deload: "arrow-down-circle", none: "time-outline" } as const;
 
 function Runner() {
   useKeepAwake();
@@ -219,30 +203,16 @@ function Runner() {
   return (
     <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: c.bg, alignItems: "center" }} testID="screen-entreno">
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, width: "100%", maxWidth: isWide ? 900 : 760 }}>
-        {/* Cabecera */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: space.xs, paddingHorizontal: space.sm, minHeight: 60 }}>
-          <IconButton testID="minimize" icon="chevron-down" label="Minimizar: el entrenamiento sigue abierto" onPress={() => (router.canGoBack() ? router.back() : router.dismissTo("/fuerza"))} />
-          <Pressable accessibilityRole="button" accessibilityLabel={`${workout.name}. Cambiar nombre`} onPress={() => setRename(true)} style={{ flex: 1, minHeight: 48, justifyContent: "center" }}>
-            <Text variant="heading" numberOfLines={1} testID="workout-name">
-              {workout.name}
-            </Text>
-            <Elapsed startedAt={workout.startedAt} doneSets={doneSets} />
-          </Pressable>
-          <Button testID="finish" label="Terminar" size="sm" onPress={() => setFinishSheet(true)} />
-        </View>
-
-        {inHistory ? (
-          <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm }}>
-            <Callout
-              tone="warning"
-              icon="alert-circle-outline"
-              testID="active-in-history"
-              action={<Button testID="clear-active-bar" label="Cerrar barra" size="sm" variant="secondary" onPress={clearActive} />}
-            >
-              Este entreno ya está en el historial
-            </Callout>
-          </View>
-        ) : null}
+        <WorkoutHeader
+          name={workout.name}
+          startedAt={workout.startedAt}
+          doneSets={doneSets}
+          inHistory={inHistory}
+          onMinimize={() => (router.canGoBack() ? router.back() : router.dismissTo("/fuerza"))}
+          onRename={() => setRename(true)}
+          onFinish={() => setFinishSheet(true)}
+          onClearActive={clearActive}
+        />
 
         <ExerciseCircles exercises={workout.exercises} current={idx} onSelect={setCurrent} onAdd={() => setPicker("add")} />
 
@@ -283,26 +253,8 @@ function Runner() {
               </Callout>
             ) : null}
 
-            {suggestion && suggestion.action !== "none" ? (
-              <Card
-                tone="alt"
-                testID="suggestion"
-                accent={suggestion.action === "increase" ? "success" : suggestion.action === "deload" ? "warning" : undefined}
-                style={{ gap: space.xs }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
-                  <Icon name={ICON[suggestion.action]} size="md" color={suggestion.action === "increase" ? "success" : suggestion.action === "deload" ? "warning" : "brandText"} />
-                  <Text variant="bodyStrong" style={{ flex: 1 }}>
-                    {suggestionTitle(suggestion, ex.kind)}
-                  </Text>
-                  {suggestion.action !== "start" && ex.sets.some((s) => !s.done) ? (
-                    <Button testID="apply-suggestion" label="Aplicar" size="sm" variant="secondary" onPress={applySuggestion} />
-                  ) : null}
-                </View>
-                <Text variant="caption" color="muted">
-                  {suggestion.reason}
-                </Text>
-              </Card>
+            {suggestion ? (
+              <SuggestionCard suggestion={suggestion} kind={ex.kind} hasPendingSets={ex.sets.some((s) => !s.done)} onApply={applySuggestion} />
             ) : null}
 
             <View onLayout={(e) => { tableY.current = e.nativeEvent.layout.y; }}>
@@ -455,15 +407,4 @@ export default function WorkoutScreen() {
     );
   }
   return <Runner />;
-}
-
-
-/** Tiempo transcurrido del entreno, que se repinta solo a sí mismo cada segundo. */
-function Elapsed({ startedAt, doneSets }: { startedAt: string; doneSets: number }) {
-  const now = useNow(1000);
-  return (
-    <Text variant="caption" color="muted" tabular testID="workout-elapsed" numberOfLines={1}>
-      {fmtDuration((now - new Date(startedAt).getTime()) / 1000)} · {doneSets} {doneSets === 1 ? "serie" : "series"}
-    </Text>
-  );
 }

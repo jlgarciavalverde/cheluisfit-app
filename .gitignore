@@ -20,3 +20,4 @@ apps/server/data
 # Plantilla sin secretos: sí se versiona.
 !.env.example
 .repo-*.bundle
+package-lock.json

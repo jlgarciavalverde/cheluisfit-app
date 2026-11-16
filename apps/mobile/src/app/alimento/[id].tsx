@@ -227,6 +227,7 @@ export default function FoodDetailScreen() {
 
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={`Nutrientes completos. ${showAll ? "Contraer" : "Expandir"}`}
             accessibilityState={{ expanded: showAll }}
             onPress={() => setShowAll((v) => !v)}
             style={{ flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 48, marginTop: space.sm }}

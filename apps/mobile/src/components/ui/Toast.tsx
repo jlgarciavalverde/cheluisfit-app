@@ -75,6 +75,7 @@ export function ToastHost({ bottomOffset = 0 }: { bottomOffset?: number }) {
         {actionLabel ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={actionLabel}
             onPress={() => {
               onAction?.();
               hide();

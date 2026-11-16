@@ -23,6 +23,7 @@ export function Chip({
     <Pressable
       testID={testID}
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ selected: !!selected }}
       onPress={() => {
         haptic.tap();

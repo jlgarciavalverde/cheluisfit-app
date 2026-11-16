@@ -138,7 +138,7 @@ export default function CreateExerciseScreen() {
                 <Button testID="cx-photo-library" label="Galería" icon="images-outline" variant="secondary" size="sm" onPress={() => pickPhoto("library")} />
               </View>
               {photoUri ? (
-                <Pressable accessibilityRole="button" onPress={() => setPhotoUri(null)} style={{ flexDirection: "row", alignItems: "center", gap: space.xs, alignSelf: "flex-start" }}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Quitar foto" onPress={() => setPhotoUri(null)} style={{ flexDirection: "row", alignItems: "center", gap: space.xs, alignSelf: "flex-start" }}>
                   <Icon name="trash-outline" size="xs" color="muted" />
                   <Text variant="caption" color="muted">
                     Quitar foto

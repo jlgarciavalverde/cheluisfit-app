@@ -17,7 +17,11 @@ import { sumNutrients } from "@/domain/nutrition";
 import { space } from "@/theme/tokens";
 
 // Three.js pesa: solo se carga al abrir la Nevera, nunca con el resto de la app.
-const Fridge3D = lazy(() => import("@/components/fridge/Fridge3D"));
+const fridge3DImport = () => import("@/components/fridge/Fridge3D");
+const Fridge3D = lazy(fridge3DImport);
+
+/** Precarga el bundle de Three.js/Fridge3D en tiempo muerto para que /nevera abra rápido. */
+export const prefetchFridge3D = () => void fridge3DImport();
 
 const DAYS_STALE = 3;
 

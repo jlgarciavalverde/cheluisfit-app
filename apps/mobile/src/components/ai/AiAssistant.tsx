@@ -1,5 +1,5 @@
 import { usePathname } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FullScreenModal } from "@/components/FullScreenModal";
@@ -160,7 +160,7 @@ function applyProposal(p: AiProposal, section: AiSection, pathname: string): { o
   return { ok: true, message: "Objetivo actualizado (el ajuste automático queda en pausa mientras tengas un objetivo a mano)" };
 }
 
-function MessageBubble({
+const MessageBubble = memo(function MessageBubble({
   message,
   section,
   pathname,
@@ -226,7 +226,7 @@ function MessageBubble({
       ))}
     </View>
   );
-}
+});
 
 /** Burbuja flotante visible en cualquier pantalla; abre un panel de chat con el contexto de la sección actual. */
 export function AiAssistant() {
@@ -258,11 +258,11 @@ export function AiAssistant() {
   // En el entreno en curso tapaba el círculo de «hecho» de las series (visto en el móvil).
   if (!token || (isLiveWorkoutPath(pathname) && !open)) return null;
 
-  const resolveProposal = (msgIndex: number, propIndex: number, resolved: "applied" | "discarded") => {
+  const resolveProposal = useCallback((msgIndex: number, propIndex: number, resolved: "applied" | "discarded") => {
     setMessages((cur) =>
       cur.map((m, i) => (i !== msgIndex || !m.proposals ? m : { ...m, proposals: m.proposals.map((p, j) => (j === propIndex ? { ...p, resolved } : p)) })),
     );
-  };
+  }, [setMessages]);
 
   async function ask(history: ChatMessage[]) {
     if (!token) return;

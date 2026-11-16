@@ -7,6 +7,7 @@ import { countLabel, effectiveQuery } from "@/domain/search";
 import { ExerciseRow } from "@/components/strength/ExerciseRow";
 import { MuscleVolumeCard, RoutineCard, WorkoutCard } from "@/components/strength/cards";
 import { BottomSheet, Button, Card, ConfirmSheet, Chip, ChipRow, EmptyState, CollapsibleSection, IconButton, Overline, ResponsiveGrid, SearchField, Section, SegmentedControl, Text } from "@/components/ui";
+import { haptic } from "@/components/ui/haptics";
 import { toast } from "@/components/ui/Toast";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
 import { filterExercises } from "@/data/exerciseSearch";
@@ -60,6 +61,7 @@ export default function FuerzaScreen() {
 
   const begin = (r: Routine | null) => {
     start(r, library);
+    haptic.success();
     const id = useActiveWorkout.getState().workout?.id;
     if (id) router.push({ pathname: "/entreno/[id]", params: { id } });
   };
@@ -183,11 +185,13 @@ export default function FuerzaScreen() {
               onEdit={() => router.push({ pathname: "/rutina/[id]", params: { id: r.id } })}
               onDuplicate={() => {
                 const c = duplicateRoutine(r.id);
-                if (c)
+                if (c) {
+                  haptic.success();
                   toast(`Duplicada como «${c.name}»`, {
                     actionLabel: "Editar",
                     onAction: () => router.push({ pathname: "/rutina/[id]", params: { id: c.id } }),
                   });
+                }
               }}
             />
           ))}
@@ -313,6 +317,7 @@ export default function FuerzaScreen() {
         onClose={() => setConfirmDiscard(false)}
         onConfirm={() => {
           discard();
+          haptic.warn();
           toast("Entrenamiento descartado");
         }}
       />

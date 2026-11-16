@@ -10,6 +10,7 @@ import { RunningTemplates } from "@/components/running/RunningTemplates";
 import { SyncPanel } from "@/components/running/SyncPanel";
 import { formatMinutes } from "@/components/running/TemplateCard";
 import { Button, Card, EmptyState, Icon, ResponsiveGrid, Section, SegmentedControl, Stat, Text } from "@/components/ui";
+import { haptic } from "@/components/ui/haptics";
 import { toast } from "@/components/ui/Toast";
 import { useRunning } from "@/data/runningStore";
 import { addDays, dayLabel, shortDayLabel, todayKey } from "@/domain/dates";
@@ -114,7 +115,10 @@ export default function RunningScreen() {
                   size="sm"
                   onPress={() => {
                     const removed = unplan(p.id);
-                    if (removed) toast("Entrenamiento quitado", { actionLabel: "Deshacer", onAction: () => useRunning.getState().restorePlanned(removed) });
+                    if (removed) {
+                      haptic.warn();
+                      toast("Entrenamiento quitado", { actionLabel: "Deshacer", onAction: () => useRunning.getState().restorePlanned(removed) });
+                    }
                   }}
                 />
               </Card>
@@ -166,7 +170,10 @@ export default function RunningScreen() {
                       size="sm"
                       onPress={() => {
                         const removed = unplan(p.id);
-                        if (removed) toast("Entrenamiento quitado", { actionLabel: "Deshacer", onAction: () => useRunning.getState().restorePlanned(removed) });
+                        if (removed) {
+                          haptic.warn();
+                          toast("Entrenamiento quitado", { actionLabel: "Deshacer", onAction: () => useRunning.getState().restorePlanned(removed) });
+                        }
                       }}
                     />
                   </View>

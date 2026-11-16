@@ -5,6 +5,7 @@ import { Screen, ScreenHeader } from "@/components/Screen";
 import { ActionList, ActionRow, BottomSheet, Button, Callout, Card, ConfirmSheet, EmptyState, IconButton, ListGroup, ListRow, Section, SegmentedControl, Skeleton, Text } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { FridgeItemSheet } from "@/components/fridge/FridgeItemSheet";
+import { haptic } from "@/components/ui/haptics";
 import { api, ApiError } from "@/data/api";
 import { captureAiPhoto } from "@/data/aiVision";
 import { useAiPanel } from "@/data/aiPanelStore";
@@ -51,6 +52,7 @@ export default function FridgeScreen() {
 
   const [view, setView] = useState<"3d" | "list">("3d");
   const [scanning, setScanning] = useState(false);
+  const [scanPhase, setScanPhase] = useState<"upload" | "analyze" | null>(null);
   const [askMode, setAskMode] = useState<"camera" | "library" | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<FridgeItem | null | "new">(null);
@@ -69,6 +71,7 @@ export default function FridgeScreen() {
   const remove = (item: FridgeItem) => {
     removeFridgeItem(item.id);
     if (selectedId === item.id) setSelectedId(null);
+    haptic.warn();
     toast(`«${item.name}» quitado`, { actionLabel: "Deshacer", onAction: () => upsertFridgeItem(item) });
   };
 
@@ -80,8 +83,10 @@ export default function FridgeScreen() {
     setLastScan({ uri, mode });
     setScanError(null);
     setScanning(true);
+    setScanPhase("upload");
     const before = fridge;
     try {
+      setScanPhase("analyze");
       const { scan: result } = await api.aiFridgeScan(token, uri);
       if (result.items.length === 0) {
         toast("No he reconocido ningún alimento. Prueba con más luz o más cerca.");
@@ -90,6 +95,7 @@ export default function FridgeScreen() {
       applyFridgeScan(result, mode);
       setSelectedId(null);
       setLastScan(null);
+      haptic.success();
       const n = result.items.length;
       toast(`${n} ${n === 1 ? "alimento" : "alimentos"} ${mode === "add" ? (n === 1 ? "añadido" : "añadidos") : "en la nevera"}${result.positioned ? "" : " (sin sitio exacto: colócalos si quieres)"}`, {
         actionLabel: "Deshacer",
@@ -107,9 +113,11 @@ export default function FridgeScreen() {
                 : e.message
           : "No se pudo analizar la foto. Prueba de nuevo.";
       setScanError(message);
+      haptic.warn();
       toast(message);
     } finally {
       setScanning(false);
+      setScanPhase(null);
     }
   };
 
@@ -162,7 +170,7 @@ export default function FridgeScreen() {
       <View style={{ gap: space.lg }}>
         <View style={{ flexDirection: "row", gap: space.sm }}>
           <View style={{ flex: 1 }}>
-            <Button testID="scan-fridge" label={scanning ? "Analizando…" : "Hacer foto"} icon="camera-outline" size="lg" fullWidth loading={scanning} onPress={() => startScan("camera")} />
+            <Button testID="scan-fridge" label={scanning ? (scanPhase === "upload" ? "Subiendo foto…" : "Analizando…") : "Hacer foto"} icon="camera-outline" size="lg" fullWidth loading={scanning} onPress={() => startScan("camera")} />
           </View>
           <View style={{ flex: 1 }}>
             <Button testID="scan-fridge-library" label="De la galería" icon="images-outline" size="lg" variant="secondary" fullWidth disabled={scanning} onPress={() => startScan("library")} />
@@ -287,6 +295,7 @@ export default function FridgeScreen() {
           setFridge({ ...fridge, items: fridge.items.filter((i) => !ids.has(i.id)) });
           if (selectedId && ids.has(selectedId)) setSelectedId(null);
           setConfirmStale(false);
+          haptic.success();
           toast(`${doubtful.length} ${doubtful.length === 1 ? "alimento quitado" : "alimentos quitados"}`, {
             actionLabel: "Deshacer",
             onAction: () => setFridge(before),
@@ -306,6 +315,7 @@ export default function FridgeScreen() {
           clearFridge();
           setSelectedId(null);
           setConfirmClear(false);
+          haptic.warn();
           toast("Nevera vaciada", { actionLabel: "Deshacer", onAction: () => setFridge(before) });
         }}
       />

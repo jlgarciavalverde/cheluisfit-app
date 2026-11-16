@@ -199,6 +199,21 @@ export function daysSinceScan(lastScannedAt: string | null, now: Date = new Date
   return Math.max(0, Math.floor((now.getTime() - Date.parse(lastScannedAt)) / 86_400_000));
 }
 
+const STALE_SCAN_DAYS = 3;
+
+/**
+ * Alimentos «dudosos»: nevera sin foto reciente (más de `staleScanDays` días) o con pista de
+ * caducidad cuando el último escaneo tiene al menos un día.
+ */
+export function staleFridgeItems(fridge: Fridge, now: Date = new Date(), opts?: { staleScanDays?: number }): FridgeItem[] {
+  const staleScanDays = opts?.staleScanDays ?? STALE_SCAN_DAYS;
+  const days = daysSinceScan(fridge.lastScannedAt, now);
+  if (days == null) return [];
+  if (days > staleScanDays) return [...fridge.items];
+  if (days >= 1) return fridge.items.filter((it) => !!it.expiresHint?.trim());
+  return [];
+}
+
 /** Resumen compacto para el asistente, por sitios, acotado a `maxChars`. */
 export function fridgeContext(fridge: Fridge, now: Date = new Date(), maxChars = 700): string | null {
   if (fridge.items.length === 0) return null;

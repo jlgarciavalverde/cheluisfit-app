@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { View, Linking } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
+import { SyncStatusCallout } from "@/components/SyncStatusCallout";
 import { UpdateCallout } from "@/components/UpdateCallout";
 import { AccountSection } from "@/components/more/AccountSection";
 import { Button, Card, CheckRow, Chip, ConfirmSheet, Icon, ListGroup, ListRow, Section, SegmentedControl, Text } from "@/components/ui";
@@ -12,7 +13,7 @@ import { useRunning } from "@/data/runningStore";
 import { useStrength } from "@/data/strengthStore";
 import { DEFAULT_PLATES, type EffortMode } from "@/domain/strength";
 import { useNutrition } from "@/data/store";
-import { exportUserData } from "@/lib/exportData";
+import { exportUserData, importUserData, parseExportJson, pickImportFile, type ParsedExport } from "@/lib/exportData";
 import { useTheme, type ThemePref } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
 
@@ -32,6 +33,8 @@ export default function MasScreen() {
   const remindMeals = useNutrition((s) => s.remindMeals);
   const setRemindMeals = useNutrition((s) => s.setRemindMeals);
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [pendingImport, setPendingImport] = useState<ParsedExport | null>(null);
   const [confirmReset, setConfirmReset] = useState<"demo" | "fresh" | null>(null);
   const barKg = useStrength((s) => s.barKg);
   const plates = useStrength((s) => s.plates);
@@ -42,6 +45,7 @@ export default function MasScreen() {
     <Screen variant="tab" testID="screen-mas">
       <ScreenHeader title="Más" />
       <View style={{ gap: space.xl }}>
+        <SyncStatusCallout />
         <UpdateCallout />
         <ListGroup>
           <ListRow icon="person-circle-outline" title={name || user?.name || "Tu perfil"} subtitle="Datos personales y objetivo de nutrición" chevron onPress={() => router.push("/objetivo")} />
@@ -73,7 +77,7 @@ export default function MasScreen() {
               checked={remindMeals}
               onChange={setRemindMeals}
               label="Recordarme registrar las comidas"
-              hint="Un aviso a las 21:00 si ese día no has anotado nada. En el navegador o sin permiso de notificaciones no llega."
+              hint="Un aviso todos los días a las 21:00, aunque ya hayas registrado comidas (no comprueba el día). En el navegador o sin permiso de notificaciones no llega."
             />
           </Card>
         </Section>
@@ -148,26 +152,52 @@ export default function MasScreen() {
         </Section>
 
         <Section kind="overline" title="Tus datos" gap={space.sm}>
-          <Button
-            testID="export-data"
-            label={exporting ? "Preparando…" : "Exportar mis datos"}
-            icon="download-outline"
-            variant="secondary"
-            disabled={exporting}
-            onPress={async () => {
-              setExporting(true);
-              try {
-                const ok = await exportUserData();
-                if (!ok) toast("No se pudo compartir el archivo en este dispositivo");
-              } catch {
-                toast("No se pudo exportar. Inténtalo de nuevo.");
-              } finally {
-                setExporting(false);
-              }
-            }}
-          />
+          <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
+            <Button
+              testID="export-data"
+              label={exporting ? "Preparando…" : "Exportar mis datos"}
+              icon="download-outline"
+              variant="secondary"
+              disabled={exporting || importing}
+              onPress={async () => {
+                setExporting(true);
+                try {
+                  const ok = await exportUserData();
+                  if (!ok) toast("No se pudo compartir el archivo en este dispositivo");
+                } catch {
+                  toast("No se pudo exportar. Inténtalo de nuevo.");
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            />
+            <Button
+              testID="import-data"
+              label={importing ? "Leyendo…" : "Importar desde JSON"}
+              icon="cloud-upload-outline"
+              variant="secondary"
+              disabled={exporting || importing}
+              onPress={async () => {
+                setImporting(true);
+                try {
+                  const raw = await pickImportFile();
+                  if (!raw) return;
+                  const parsed = parseExportJson(raw);
+                  if (!parsed.ok) {
+                    toast(parsed.message);
+                    return;
+                  }
+                  setPendingImport(parsed.data);
+                } catch {
+                  toast("No se pudo leer el archivo.");
+                } finally {
+                  setImporting(false);
+                }
+              }}
+            />
+          </View>
           <Text variant="caption" color="faint">
-            Descarga un JSON con tu nutrición, running y fuerza tal cual están en este móvil — para tu tranquilidad, o para llevártelos si algún día dejas de usar la app.
+            Exporta o importa un JSON con tu nutrición, running y fuerza tal cual están en el móvil — para copia de seguridad o para traer datos de otro dispositivo. La importación sustituye las claves incluidas en el archivo.
           </Text>
         </Section>
 
@@ -209,6 +239,28 @@ export default function MasScreen() {
           </Text>
         </Section>
       </View>
+      <ConfirmSheet
+        testID="confirm-import"
+        visible={pendingImport !== null}
+        title="¿Sustituir los datos de este móvil?"
+        message="Se sobrescribirán en este dispositivo las secciones que traiga el archivo (nutrición, running, fuerza…). Lo que no venga en el JSON se mantiene. No se puede deshacer."
+        confirmLabel="Importar"
+        onClose={() => setPendingImport(null)}
+        onConfirm={async () => {
+          if (!pendingImport) return;
+          const data = pendingImport;
+          setPendingImport(null);
+          setImporting(true);
+          try {
+            await importUserData(data);
+            toast("Datos importados");
+          } catch {
+            toast("No se pudo importar. Inténtalo de nuevo.");
+          } finally {
+            setImporting(false);
+          }
+        }}
+      />
       <ConfirmSheet
         testID="confirm-reset"
         visible={confirmReset !== null}

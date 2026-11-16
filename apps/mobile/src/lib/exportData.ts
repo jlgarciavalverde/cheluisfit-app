@@ -1,9 +1,59 @@
-// Exportar los datos de la persona a un JSON descargable — los datos ya existen (los mismos
-// blobs que `blobSync.ts` sincroniza con el servidor), esto solo los empaqueta. Nunca pasa por
-// el servidor: se lee directo de `AsyncStorage`, igual que hace `blobSync.ts` para sincronizar.
+// Exportar e importar los datos de la persona en JSON — los mismos blobs que `blobSync.ts`
+// sincroniza con el servidor. Nunca pasa por el servidor en la exportación: se lee directo de
+// AsyncStorage.
 import { Platform } from "react-native";
-import { readLocal, SYNC_KEYS } from "@/data/blobSync";
+import { loadMeta, readLocal, rehydrateAllStores, saveMeta, SYNC_KEYS, writeLocal, type SyncKey } from "@/data/blobSync";
+import { syncNow } from "@/data/sync";
+import { useAuth } from "@/data/authStore";
 import { todayKey } from "@/domain/dates";
+import { parseExportJson, type ParsedExport } from "./exportParse";
+
+export { parseExportJson, type ParsedExport } from "./exportParse";
+
+/** Sustituye en local las claves importadas y rehidrata las tiendas. */
+export async function importUserData(data: ParsedExport): Promise<void> {
+  const keys = Object.keys(data.blobs) as SyncKey[]; // mismas cadenas que ExportSyncKey
+  const meta = await loadMeta();
+  for (const key of keys) {
+    const blob = data.blobs[key];
+    if (blob === undefined) continue;
+    const hash = await writeLocal(key, blob);
+    if (meta.keys[key]) meta.keys[key] = { ...meta.keys[key]!, hash, base: meta.keys[key]!.base };
+    else meta.keys[key] = { base: 0, hash };
+  }
+  await saveMeta(meta);
+  await rehydrateAllStores();
+  if (useAuth.getState().token) await syncNow();
+}
+
+/** Abre el selector de archivo y devuelve el texto del JSON, o `null` si se canceló. */
+export async function pickImportFile(): Promise<string | null> {
+  if (Platform.OS === "web") {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/json,.json";
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) {
+          resolve(null);
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+        reader.onerror = () => resolve(null);
+        reader.readAsText(file);
+      };
+      input.click();
+    });
+  }
+  const DocumentPicker = await import("expo-document-picker");
+  const pick = await DocumentPicker.getDocumentAsync({ type: "application/json", copyToCacheDirectory: true, multiple: false });
+  if (pick.canceled || !pick.assets?.[0]?.uri) return null;
+  const { File } = await import("expo-file-system");
+  const file = new File(pick.assets[0].uri);
+  return file.text();
+}
 
 async function buildExportJson(): Promise<string> {
   const blobs: Record<string, unknown> = {};

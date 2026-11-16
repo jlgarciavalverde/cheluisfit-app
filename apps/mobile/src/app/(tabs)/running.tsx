@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { View } from "react-native";
+import { Linking, View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
 import { BarChart } from "@/components/charts/BarChart";
 import { ActivityCard } from "@/components/running/ActivityCard";
@@ -15,6 +15,7 @@ import { useRunning } from "@/data/runningStore";
 import { addDays, dayLabel, shortDayLabel, todayKey } from "@/domain/dates";
 import { fmtKm } from "@/domain/format";
 import { dailyMeters, estimateTemplate, weeklyTotals } from "@/domain/running";
+import { ensureReminderNotifications } from "@/lib/reminders";
 import { space } from "@/theme/tokens";
 
 type Tab = "sessions" | "templates" | "progress";
@@ -223,14 +224,25 @@ export default function RunningScreen() {
         visible={planFor !== null}
         title={planTitle}
         onClose={() => setPlanFor(null)}
-        onPick={(date) => {
+        onPick={async (date) => {
           if (!planFor) return;
           const id = planTemplate(planFor, date);
           setPlanFor(null);
-          toast(`Planificada para ${dayLabel(date, today).toLowerCase()}`, {
-            actionLabel: "Deshacer",
-            onAction: () => unplan(id),
-          });
+          const [y, m, d] = date.split("-").map(Number);
+          const at8 = new Date(y!, m! - 1, d!, 8, 0, 0);
+          const needsMorningNotice = at8.getTime() > Date.now() + 60_000;
+          const permitted = !needsMorningNotice || (await ensureReminderNotifications());
+          if (needsMorningNotice && !permitted) {
+            toast("Sin permiso de notificaciones: el entreno se planifica, pero no habrá aviso a las 8:00", {
+              actionLabel: "Ajustes",
+              onAction: () => Linking.openSettings(),
+            });
+          } else {
+            toast(`Planificada para ${dayLabel(date, today).toLowerCase()}`, {
+              actionLabel: "Deshacer",
+              onAction: () => unplan(id),
+            });
+          }
         }}
       />
     </Screen>

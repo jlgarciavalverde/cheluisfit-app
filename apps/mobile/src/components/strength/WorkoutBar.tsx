@@ -2,6 +2,7 @@ import { router, usePathname } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useActiveWorkout } from "@/data/activeWorkoutStore";
+import { useStrength } from "@/data/strengthStore";
 import { fmtDuration } from "@/domain/format";
 import { remainingS } from "@/domain/strength";
 import { useNow } from "@/lib/useNow";
@@ -18,6 +19,8 @@ export function WorkoutBar() {
   const insets = useSafeAreaInsets();
   const workout = useActiveWorkout((s) => s.workout);
   const rest = useActiveWorkout((s) => s.rest);
+  const clearActive = useActiveWorkout((s) => s.clearActive);
+  const inHistory = useStrength((s) => !!workout && s.workouts.some((w) => w.id === workout.id));
   const pathname = usePathname();
   const chrome = useBottomChrome((s) => s.height);
   const now = useNow(1000, !!workout);
@@ -39,8 +42,10 @@ export function WorkoutBar() {
       <Pressable
         testID="workout-bar"
         accessibilityRole="button"
-        accessibilityLabel={`Entrenamiento en curso: ${workout.name}. Volver`}
-        onPress={() => router.push({ pathname: "/entreno/[id]", params: { id: workout.id } })}
+        accessibilityLabel={
+          inHistory ? `Entrenamiento ya guardado: ${workout.name}. Cerrar barra` : `Entrenamiento en curso: ${workout.name}. Volver`
+        }
+        onPress={() => (inHistory ? clearActive() : router.push({ pathname: "/entreno/[id]", params: { id: workout.id } }))}
         style={({ pressed }) => ({
           flexDirection: "row",
           alignItems: "center",
@@ -48,25 +53,26 @@ export function WorkoutBar() {
           minHeight: 56,
           paddingHorizontal: space.lg,
           borderRadius: radius.lg,
-          backgroundColor: c.brand,
+          backgroundColor: inHistory ? c.warning : c.brand,
           opacity: pressed ? 0.9 : 1,
           ...elevation.floating,
         })}
       >
-        <Icon name="barbell" size="md" color="onBrand" />
+        <Icon name={inHistory ? "alert-circle-outline" : "barbell"} size="md" color="onBrand" />
         <View style={{ flex: 1 }}>
           <Text variant="bodyStrong" color="onBrand" numberOfLines={1}>
-            {workout.name}
+            {inHistory ? "Ya está en el historial" : workout.name}
           </Text>
-          <Text variant="caption" color="onBrand" tabular>
-            {fmtDuration((now - new Date(workout.startedAt).getTime()) / 1000)}
-            {left !== null ? (left > 0 ? ` · descanso ${fmtDuration(left)}` : " · descanso terminado") : ""}
+          <Text variant="caption" color="onBrand" tabular numberOfLines={1}>
+            {inHistory
+              ? workout.name
+              : `${fmtDuration((now - new Date(workout.startedAt).getTime()) / 1000)}${left !== null ? (left > 0 ? ` · descanso ${fmtDuration(left)}` : " · descanso terminado") : ""}`}
           </Text>
         </View>
         <Text variant="bodyStrong" color="onBrand">
-          Volver
+          {inHistory ? "Cerrar" : "Volver"}
         </Text>
-        <Icon name="chevron-forward" size="sm" color="onBrand" />
+        {!inHistory ? <Icon name="chevron-forward" size="sm" color="onBrand" /> : null}
       </Pressable>
     </View>
   );

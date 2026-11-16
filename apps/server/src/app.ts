@@ -65,12 +65,22 @@ export async function buildApp(cfg: AppConfig): Promise<App> {
     maxAge: 86400,
   });
   await app.register(rateLimit, { global: false });
-  await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
+  // `files: 2`: el escaneo de producto admite delantera + trasera; `readImages` acota por petición.
+  await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 2 } });
 
   app.setErrorHandler((err: unknown, req, reply) => {
     if (err instanceof ZodError) return reply.code(400).send({ error: "validation", message: err.issues[0]?.message ?? "Datos no válidos" });
     if (err instanceof HttpError) return reply.code(err.status).send({ error: "http", message: err.message });
-    const e = err as { statusCode?: number; message?: string };
+    const e = err as { statusCode?: number; message?: string; code?: string };
+    // @fastify/rate-limit: si la ruta no definió `errorResponseBuilder`, el mensaje por defecto
+    // viene en inglés; en visión ya va en español, y aquí unificamos el resto.
+    if (e.statusCode === 429) {
+      const message =
+        typeof e.message === "string" && /análisis con foto|por hora/i.test(e.message)
+          ? e.message
+          : "Has hecho demasiadas peticiones. Prueba en un rato.";
+      return reply.code(429).send({ error: "rate_limit", message });
+    }
     if (e.statusCode && e.statusCode < 500) return reply.code(e.statusCode).send({ error: "request", message: e.message });
     req.log.error(err);
     return reply.code(500).send({ error: "internal", message: "Algo ha fallado en el servidor" });

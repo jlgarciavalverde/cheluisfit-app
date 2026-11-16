@@ -58,7 +58,10 @@ en el `.env` (ninguna es obligatoria por separado, pero hace falta al menos una)
 devuelve `503` y la burbuja del móvil ni siquiera se muestra si no hay sesión — pero si hay
 sesión y no hay claves, el chat falla con un mensaje claro, no en silencio (el móvil enseña el
 `message` del servidor tal cual: 503, 429, 502). Timeout del chat en el móvil: 45 s (Gemini y, si
-falla, Groq). **Historial**: el móvil manda los últimos 20 mensajes (`chatHistory()` de
+falla, Groq). En el servidor, `withFallback` de `routes/ai.ts` (chat y análisis) limita cada
+intento de proveedor a ~20 s (`CHAT_PROVIDER_TIMEOUT_MS` en `vision.ts`, mismo helper
+`withProviderTimeout` que la IA con foto) y corta si el cliente cierra la petición
+(`clientAbortSignal` en `req.raw`) sin gastar el respaldo en Groq. **Historial**: el móvil manda los últimos 20 mensajes (`chatHistory()` de
 `domain/aiContext.ts`): quita sus propios mensajes de error y convierte las respuestas que solo
 traían propuesta en «[propuse añadir…]». El servidor (`AiChatInput` en `schemas.ts`) es además
 tolerante: quita vacíos, recorta a 2000 caracteres y a 20 mensajes empezando por la persona —
@@ -117,31 +120,41 @@ la semana.
 **IA con foto** (`routes/aiVision.ts`, `server/src/vision.ts`): dos endpoints aparte de
 `/api/ai/chat` — `POST /api/ai/vision/fridge` (Nevera) y `POST /api/ai/vision/product` (escanear
 un producto por foto en vez de por código de barras, `escaner-foto.tsx`). Mismas reglas que el
-asistente normal (el servidor solo propone, nunca aplica), pero con dos diferencias a propósito:
-- **Solo Gemini, sin el respaldo de Groq** — el modelo de Groq configurado por defecto
-  (`GROQ_MODEL`) no tiene visión; un reintento silencioso contra él fallaría igual pero sin decir
-  por qué. Sin `GEMINI_API_KEY`, 503 directo.
+asistente normal (el servidor solo propone, nunca aplica), con estas particularidades:
+- **Gemini + respaldo de visión en Groq** (`GROQ_VISION_MODEL`, por defecto `qwen/qwen3.8-27b`) —
+  el `GROQ_MODEL` del chat **no** ve fotos; por eso visión usa otro id. Basta con una de las dos
+  claves (`GEMINI_API_KEY` o `GROQ_API_KEY`). **503** solo si no hay ninguna; **502** si hay claves
+  pero todos los proveedores fallan (mismo criterio que el chat). Timeout por proveedor ~22 s y
+  presupuesto total de petición ~50 s (`PROVIDER_TIMEOUT_MS` / `VISION_BUDGET_MS`): el cliente
+  aborta a 60 s, así que el servidor debe terminar antes. La señal del presupuesto se combina con
+  el cierre de la conexión HTTP (`mergeAbortSignals` + `clientAbortSignal`) para no seguir
+  llamando a Gemini/Groq si el móvil ya canceló la subida. Si Gemini falla con 404/401/403 en la
+  salida estructurada, el plan B en texto **no** lo vuelve a llamar (`hardFailed` / `skip`).
 - **Las fotos nunca se guardan**, ni en el móvil ni en el servidor — no pasan por
   `routes/media.ts` ni la tabla `media`: `vision.ts`'s `readImages()` las lee a `Buffer` en
   memoria desde el propio multipart de la petición y se descartan al terminar. Distinto de las
-  fotos de publicaciones sociales, que sí se guardan porque se muestran después.
+  fotos de publicaciones sociales, que sí se guardan porque se muestran después. Multipart global
+  admite hasta **2** archivos (delantera + trasera del producto); `readImages` acota por petición.
 - **La subida reintenta una sola vez, y solo ante un fallo de red inmediato**: `uploadForAi`
   (`api.ts`) — en datos móviles la subida puede no salir a la primera sin que el servidor falle
   (verificado: el endpoint responde en ~2 s). **Un timeout (60 s) no se reintenta**: ese intento
-  puede haber llegado ya a Gemini y repetirlo gastaría dos veces la cuota y el límite de 20/hora.
+  puede haber llegado ya a Gemini y repetirlo gastaría dos veces la cuota y el límite de 30/hora.
   Un error HTTP se respeta a la primera. Los mensajes distinguen timeout («La subida tardó
   demasiado — prueba con WiFi»), sin conexión y error del servidor. La foto se redimensiona a
   960 px **por el lado largo** (sin ampliar las pequeñas, ~200 KB) antes de subir: una foto del
   sensor sin tocar tarda tanto que el abort se la come antes de salir (visto de verdad: cero
-  peticiones en los logs del servidor).
+  peticiones en los logs del servidor). Ante error, Nevera y escáner-foto guardan la URI y
+  ofrecen **Reintentar** sin volver a sacar la foto (`fridge-scan-retry` / `photo-scan-retry`).
 - **Nada de fotos ni datos de salud en los logs**: los errores del SDK de IA (`APICallError`)
   llevan `requestBodyValues` con la foto en base64 o el contexto de la persona. Se registran
   siempre con `logSafeError()` (`http.ts`: nombre, mensaje, `statusCode`, url), nunca el error
   entero. `readImages()` vacía (`part.file.resume()`) cualquier archivo de un campo inesperado —
   sin eso la petición se queda colgada para siempre — y traduce los errores de la librería
-  multipart (413 «La foto pesa demasiado»). Sin clave de Gemini, 503 **antes** de leer las fotos.
+  multipart (413 «La foto pesa demasiado»). Sin ninguna clave de IA, 503 **antes** de leer las fotos.
 - **Límites por sesión, no por IP** (`perUserKey` de `http.ts`, en IA, IA con foto y blobs): con
-  `trustProxy: true` la IP sale de `X-Forwarded-For`, que el cliente puede inventarse.
+  `trustProxy: true` la IP sale de `X-Forwarded-For`, que el cliente puede inventarse. Visión:
+  **30/hora** (mensaje 429 en español con el cupo). Las peticiones JSON normales del cliente
+  usan 12 s de timeout y **un** reintento en GET ante fallo de red inmediato (no timeout).
 
 `propose_food` es la única *tool* del endpoint de producto (mismo patrón sin `execute` que
 `add_meal_entry`/`add_note`/`adjust_goal`): el modelo lee las fotos (delantera obligatoria,
@@ -156,7 +169,7 @@ revisar los datos antes de guardar.
 `gemini-2.5-flash-lite` pasó a devolver 404 («no longer available to new users») y como el
 `catch` de `callVision` convertía todo en un 503 idéntico al de «falta la clave», el fallo fue
 invisible en los logs hasta depurarlo a mano (2026-09-24). El defecto ahora es
-`gemini-3.5-flash-lite` y el `catch` deja el error real en el log del contenedor. Ante un 503
+`gemini-3.5-flash-lite` y el `catch` deja el error real en el log del contenedor. Ante un 502/503
 de visión, mirar primero `docker logs cheluisfit | grep vision` y luego si el modelo sigue vivo.
 
 **Nevera** (`nevera.tsx`, `domain/fridge.ts`, `components/fridge/`, desde la 0.17): la IA ya no

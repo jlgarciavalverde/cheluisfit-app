@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { requireUser } from "../auth";
 import { perUserKey } from "../http";
-import { callVision, callVisionObject, readImages, requireVisionKey } from "../vision";
+import { callVision, callVisionObject, clientAbortSignal, mergeAbortSignals, readImages, requireVisionKey, startVisionBudget } from "../vision";
 import type { Register } from "./ctx";
 
 const FRIDGE_INSTRUCTIONS =
@@ -145,24 +145,52 @@ function textFallbackScan(lines: string[]): FridgeScan & { positioned: false } {
 /**
  * Llamadas de IA con foto (nevera, identificación de producto). Endpoints aparte de
  * `/api/ai/chat`: las fotos van por multipart, no por JSON; respaldo con el modelo de visión de
- * Groq — ver `vision.ts`.
+ * Groq — ver `vision.ts`. Cupo alineado con el chat (30/h) para absorber reintentos legítimos.
  */
 export const registerAiVision: Register = (app, { db, cfg }) => {
-  const visionLimit = { config: { rateLimit: { max: 20, timeWindow: "1 hour", keyGenerator: perUserKey } } };
+  const visionLimit = {
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: "1 hour",
+        keyGenerator: perUserKey,
+        errorResponseBuilder: () => ({
+          statusCode: 429,
+          error: "Too Many Requests",
+          message: "Has llegado al límite de 30 análisis con foto por hora. Prueba más tarde.",
+        }),
+      },
+    },
+  };
 
   // Respuesta: `{ items: string[] }` (compatibilidad con APK antiguas, que solo leen nombres) +
   // `scan` con posiciones/categorías para la vista 3D (`positioned: false` si vino del plan B).
   app.post("/api/ai/vision/fridge", visionLimit, async (req) => {
     requireUser(db, req.headers.authorization);
     requireVisionKey(cfg);
+    const budget = startVisionBudget();
+    const signal = mergeAbortSignals([budget.signal, clientAbortSignal(req)]);
     const images = await readImages(req, ["photo"]);
     const photo = images.get("photo")!;
-    const structured = await callVisionObject(cfg, FRIDGE_INSTRUCTIONS, [photo], "¿Qué alimentos hay en esta foto de la nevera y dónde está cada uno?", FridgeScanSchema, req.log, {
-      example: FRIDGE_EXAMPLE,
-      coerce: coerceFridge,
-    });
+    const { data: structured, hardFailed } = await callVisionObject(
+      cfg,
+      FRIDGE_INSTRUCTIONS,
+      [photo],
+      "¿Qué alimentos hay en esta foto de la nevera y dónde está cada uno?",
+      FridgeScanSchema,
+      {
+        log: req.log,
+        signal,
+        json: { example: FRIDGE_EXAMPLE, coerce: coerceFridge },
+      },
+    );
     if (structured) return { items: structured.items.map((i) => i.name), scan: { ...structured, positioned: true } };
-    const { reply } = await callVision(cfg, FRIDGE_TEXT_INSTRUCTIONS, [photo], "¿Qué ingredientes hay en esta nevera?", undefined, req.log);
+    // Plan B: no reintentar un proveedor que ya falló con 404/401/403 (p. ej. modelo retirado).
+    const { reply } = await callVision(cfg, FRIDGE_TEXT_INSTRUCTIONS, [photo], "¿Qué ingredientes hay en esta nevera?", undefined, {
+      log: req.log,
+      signal,
+      skip: hardFailed,
+    });
     const lines = parseIngredientLines(reply);
     return { items: lines, scan: textFallbackScan(lines) };
   });
@@ -170,9 +198,14 @@ export const registerAiVision: Register = (app, { db, cfg }) => {
   app.post("/api/ai/vision/product", visionLimit, async (req) => {
     requireUser(db, req.headers.authorization);
     requireVisionKey(cfg);
+    const budget = startVisionBudget();
+    const signal = mergeAbortSignals([budget.signal, clientAbortSignal(req)]);
     const images = await readImages(req, ["front"], ["back"]);
     const parts = [images.get("front")!, ...(images.has("back") ? [images.get("back")!] : [])];
-    const { reply, toolCalls } = await callVision(cfg, PRODUCT_INSTRUCTIONS, parts, "Identifica este producto y propón sus datos.", tools, req.log);
+    const { reply, toolCalls } = await callVision(cfg, PRODUCT_INSTRUCTIONS, parts, "Identifica este producto y propón sus datos.", tools, {
+      log: req.log,
+      signal,
+    });
     return { reply, proposals: toFoodProposals(toolCalls) };
   });
 };

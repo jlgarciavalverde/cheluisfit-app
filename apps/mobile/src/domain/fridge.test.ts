@@ -11,6 +11,8 @@ import {
   mergeScan,
   migrateFridge,
   shelfHeights,
+  staleFridgeItems,
+  type Fridge,
   type FridgeScan,
 } from "./fridge";
 
@@ -26,6 +28,44 @@ const scanItem = (name: string, extra: Partial<FridgeScan["items"][number]> = {}
 });
 const scan = (items: FridgeScan["items"], extra: Partial<FridgeScan> = {}): FridgeScan => ({ items, shelvesSeen: 3, doorVisible: true, positioned: true, ...extra });
 const NOW = "2026-10-25T10:00:00.000Z";
+
+function fridgeWithItems(items: Fridge["items"], lastScannedAt: string | null): Fridge {
+  return { ...EMPTY_FRIDGE, items, lastScannedAt };
+}
+
+describe("staleFridgeItems", () => {
+  const now = new Date("2026-10-25T12:00:00.000Z");
+
+  it("con escaneo de hace más de 3 días marca todos los alimentos", () => {
+    const f = fridgeWithItems(
+      [
+        { id: "a", name: "Leche", category: "lacteo", zone: "shelf", level: 0, x: 0.5, depth: "front", positioned: true, seenAt: NOW },
+        { id: "b", name: "Yogur", category: "lacteo", zone: "shelf", level: 0, x: 0.2, depth: "front", positioned: true, seenAt: NOW },
+      ],
+      "2026-10-20T10:00:00.000Z",
+    );
+    expect(staleFridgeItems(f, now)).toHaveLength(2);
+  });
+
+  it("con escaneo de ayer solo marca los que tienen pista de caducidad", () => {
+    const f = fridgeWithItems(
+      [
+        { id: "a", name: "Leche", category: "lacteo", zone: "shelf", level: 0, x: 0.5, depth: "front", positioned: true, seenAt: NOW, expiresHint: "caduca pronto" },
+        { id: "b", name: "Yogur", category: "lacteo", zone: "shelf", level: 0, x: 0.2, depth: "front", positioned: true, seenAt: NOW },
+      ],
+      "2026-10-24T10:00:00.000Z",
+    );
+    expect(staleFridgeItems(f, now).map((i) => i.id)).toEqual(["a"]);
+  });
+
+  it("con escaneo reciente no marca nada", () => {
+    const f = fridgeWithItems(
+      [{ id: "a", name: "Leche", category: "lacteo", zone: "shelf", level: 0, x: 0.5, depth: "front", positioned: true, seenAt: NOW, expiresHint: "hoy" }],
+      NOW,
+    );
+    expect(staleFridgeItems(f, now)).toEqual([]);
+  });
+});
 
 describe("itemKey", () => {
   it("trata igual singular y plural, mayúsculas y acentos", () => {

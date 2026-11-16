@@ -177,6 +177,7 @@ function Runner() {
   const pendingSets = workout.exercises.reduce((n, e) => n + e.sets.filter((s) => !s.done).length, 0);
   const allDone = !!ex && ex.sets.length > 0 && ex.sets.every((s) => s.done);
   const nextIdx = workout.exercises.findIndex((e, i) => i > idx && e.sets.some((s) => !s.done));
+  const inHistory = useMemo(() => workouts.some((w) => w.id === workout.id), [workouts, workout.id]);
 
   // Solo cambia si cambia el ejercicio o la lista de ejercicios (no al escribir en una serie).
   const exerciseIds = workout.exercises.map((e) => e.exerciseId).join("|");
@@ -229,6 +230,19 @@ function Runner() {
           </Pressable>
           <Button testID="finish" label="Terminar" size="sm" onPress={() => setFinishSheet(true)} />
         </View>
+
+        {inHistory ? (
+          <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm }}>
+            <Callout
+              tone="warning"
+              icon="alert-circle-outline"
+              testID="active-in-history"
+              action={<Button testID="clear-active-bar" label="Cerrar barra" size="sm" variant="secondary" onPress={clearActive} />}
+            >
+              Este entreno ya está en el historial
+            </Callout>
+          </View>
+        ) : null}
 
         <ExerciseCircles exercises={workout.exercises} current={idx} onSelect={setCurrent} onAdd={() => setPicker("add")} />
 

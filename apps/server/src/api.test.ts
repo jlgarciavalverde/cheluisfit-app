@@ -308,6 +308,31 @@ describe("asistente de IA", () => {
     expect(generateTextMock.mock.calls[1]?.[0].model.provider).toBe("groq");
   });
 
+  it("si Gemini se queda colgado, el timeout por proveedor salta a Groq", async () => {
+    const { CHAT_PROVIDER_TIMEOUT_MS } = await import("./vision");
+    vi.useFakeTimers();
+    generateTextMock.mockImplementationOnce(({ abortSignal }: { abortSignal?: AbortSignal }) =>
+      new Promise((_resolve, reject) => {
+        abortSignal?.addEventListener("abort", () => reject(new Error("timeout proveedor Gemini")));
+      }),
+    );
+    generateTextMock.mockResolvedValueOnce({ text: "Tras el tope.", toolCalls: [] });
+    const pending = call("POST", "/api/ai/chat", token, body);
+    await vi.advanceTimersByTimeAsync(CHAT_PROVIDER_TIMEOUT_MS + 50);
+    const r = await pending;
+    expect(r.status).toBe(200);
+    expect(r.body.reply).toBe("Tras el tope.");
+    expect(generateTextMock).toHaveBeenCalledTimes(2);
+    expect(generateTextMock.mock.calls[1]?.[0].model.provider).toBe("groq");
+    vi.useRealTimers();
+  });
+
+  it("pasa abortSignal al SDK para cancelar si el cliente cierra la conexión", async () => {
+    generateTextMock.mockResolvedValueOnce({ text: "Hola.", toolCalls: [] });
+    await call("POST", "/api/ai/chat", token, body);
+    expect(generateTextMock.mock.calls[0]?.[0].abortSignal).toBeDefined();
+  });
+
   it("tolera el historial que manda la app: mensajes vacíos (solo propuesta), largos y más de 20", async () => {
     generateTextMock.mockResolvedValueOnce({ text: "Vale.", toolCalls: [] });
     const messages = [
@@ -380,6 +405,23 @@ describe("análisis de entrenos con IA", () => {
     expect(generateTextMock.mock.calls.at(-1)?.[0].model.provider).toBe("groq");
   });
 
+  it("si Gemini tarda demasiado, el timeout por proveedor salta a Groq", async () => {
+    const { CHAT_PROVIDER_TIMEOUT_MS } = await import("./vision");
+    vi.useFakeTimers();
+    generateTextMock.mockImplementationOnce(({ abortSignal }: { abortSignal?: AbortSignal }) =>
+      new Promise((_resolve, reject) => {
+        abortSignal?.addEventListener("abort", () => reject(new Error("timeout proveedor Gemini")));
+      }),
+    );
+    generateTextMock.mockResolvedValueOnce({ text: "", toolCalls: [], output: analysis });
+    const pending = call("POST", "/api/ai/analyze", token, body);
+    await vi.advanceTimersByTimeAsync(CHAT_PROVIDER_TIMEOUT_MS + 50);
+    const r = await pending;
+    expect(r.status).toBe(200);
+    expect(generateTextMock.mock.calls.at(-1)?.[0].model.provider).toBe("groq");
+    vi.useRealTimers();
+  });
+
   it("si fallan los dos, 502", async () => {
     generateTextMock.mockRejectedValueOnce(new Error("a"));
     generateTextMock.mockRejectedValueOnce(new Error("b"));
@@ -416,6 +458,18 @@ describe("IA con foto (nevera y escaneo de producto)", () => {
       payload: Buffer.from(`--${boundary}--\r\n`),
     });
     expect(r.statusCode).toBe(400);
+  });
+
+  it("nevera: pasa abortSignal al SDK (presupuesto + posible cierre del cliente)", async () => {
+    const item = { name: "Leche", category: "lacteo", zone: "door", level: 1, x: 0.2, depth: "front", confidence: 0.9 };
+    generateTextMock.mockResolvedValueOnce({ text: "", toolCalls: [], output: { items: [item], shelvesSeen: 3, doorVisible: true } });
+    await app.inject({
+      method: "POST",
+      url: "/api/ai/vision/fridge",
+      headers: { authorization: `Bearer ${token}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipartBody([["photo", "nevera.jpg", "image/jpeg", jpegBytes]]),
+    });
+    expect(generateTextMock.mock.calls[0]?.[0].abortSignal).toBeDefined();
   });
 
   it("nevera: salida estructurada con posiciones (y nombres sueltos para APK antiguas)", async () => {
@@ -493,6 +547,24 @@ describe("IA con foto (nevera y escaneo de producto)", () => {
     expect(r.statusCode).toBe(415);
   });
 
+  it("producto: acepta delantera + trasera (multipart files ≥ 2)", async () => {
+    generateTextMock.mockResolvedValueOnce({
+      text: "Yogur.",
+      toolCalls: [{ toolName: "propose_food", input: { name: "Yogur", per100: { kcal: 60, protein: 4, carbs: 5, fat: 2, fiber: 0, sugars: 5, satFat: 1, salt: 0.1 } } }],
+    });
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/ai/vision/product",
+      headers: { authorization: `Bearer ${token}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipartBody([
+        ["front", "delante.jpg", "image/jpeg", jpegBytes],
+        ["back", "detras.jpg", "image/jpeg", jpegBytes],
+      ]),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(JSON.parse(r.body).proposals[0].name).toBe("Yogur");
+  });
+
   it("un campo de archivo que no se espera no deja la petición colgada", async () => {
     generateTextMock.mockResolvedValueOnce({ text: "- Leche", toolCalls: [] });
     const r = await app.inject({
@@ -504,6 +576,7 @@ describe("IA con foto (nevera y escaneo de producto)", () => {
         ["front", "delante.jpg", "image/jpeg", jpegBytes],
       ]),
     });
+    // Extra se drena; con files:2 globales cabe front. Si el límite por petición lo corta, 413.
     expect([200, 413]).toContain(r.statusCode);
   });
 
@@ -540,7 +613,26 @@ describe("IA con foto (nevera y escaneo de producto)", () => {
     expect(generateTextMock.mock.calls.at(-1)?.[0].model.modelId).toBe("qwen/qwen3.8-27b");
   });
 
-  it("si fallan Gemini y Groq, 503 y el log no lleva la foto", async () => {
+  it("si Gemini falla con 404, el plan B en texto no vuelve a llamar a Gemini", async () => {
+    const retired = Object.assign(new Error("modelo retirado"), { statusCode: 404 });
+    // Structured: Gemini hard-fail; Groq sin JSON usable → plan B texto solo Groq (skip Gemini).
+    generateTextMock.mockRejectedValueOnce(retired);
+    generateTextMock.mockResolvedValueOnce({ text: "no pude estructurar esto", toolCalls: [] });
+    generateTextMock.mockResolvedValueOnce({ text: "Leche\nHuevos", toolCalls: [] });
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/ai/vision/fridge",
+      headers: { authorization: `Bearer ${token}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipartBody([["photo", "nevera.jpg", "image/jpeg", jpegBytes]]),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(JSON.parse(r.body).items).toEqual(["Leche", "Huevos"]);
+    // 3 llamadas: Gemini structured (fail), Groq structured, Groq text — nunca un 4.º Gemini.
+    expect(generateTextMock).toHaveBeenCalledTimes(3);
+    expect(generateTextMock.mock.calls.map((c) => c[0].model.provider)).toEqual(["google", "groq", "groq"]);
+  });
+
+  it("si fallan Gemini y Groq, 502 (hay claves) y el log no lleva la foto", async () => {
     const err = Object.assign(new Error("modelo retirado"), { statusCode: 404, requestBodyValues: { contents: "BASE64FOTO" } });
     generateTextMock.mockRejectedValue(err);
     const r = await app.inject({
@@ -550,12 +642,12 @@ describe("IA con foto (nevera y escaneo de producto)", () => {
       payload: multipartBody([["photo", "nevera.jpg", "image/jpeg", jpegBytes]]),
     });
     generateTextMock.mockReset();
-    expect(r.statusCode).toBe(503);
+    expect(r.statusCode).toBe(502);
     expect(JSON.stringify(logSafeError(err))).not.toContain("BASE64FOTO");
     expect(logSafeError(err)).toMatchObject({ message: "modelo retirado", statusCode: 404 });
   });
 
-  it("sin ninguna clave de IA, 503 (no confunde «no configurado» con un fallo de red)", async () => {
+  it("sin ninguna clave de IA, 503 (no confunde «no configurado» con un fallo de proveedores)", async () => {
     const noKeyApp = await buildApp({ dbPath: ":memory:", mediaDir: "/tmp/cheluisfit-test-media-noai2", version: "test", setupCode: "x", allowedOrigins: [], logLevel: "silent" });
     const reg = await noKeyApp.inject({ method: "POST", url: "/api/auth/register", payload: { name: "A", email: "b@b.es", password: "12345678", setupCode: "x" } });
     const r = await noKeyApp.inject({

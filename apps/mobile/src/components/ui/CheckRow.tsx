@@ -12,6 +12,7 @@ export function CheckRow({
   onChange,
   kind = "checkbox",
   testID,
+  disabled,
 }: {
   label: string;
   hint?: string;
@@ -19,19 +20,23 @@ export function CheckRow({
   onChange: (v: boolean) => void;
   kind?: "checkbox" | "switch";
   testID?: string;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       testID={testID}
       accessibilityRole={kind}
       aria-checked={checked}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
       onPress={() => {
+        if (disabled) return;
         haptic.tap();
         onChange(!checked);
       }}
-      style={{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 52 }}
+      style={{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 52, opacity: disabled ? 0.55 : 1 }}
     >
-      <Icon name={checked ? "checkbox" : "square-outline"} size="lg" color={checked ? "brandText" : "muted"} />
+      <Icon name={checked ? "checkbox" : "square-outline"} size="lg" color={disabled ? "muted" : checked ? "brandText" : "muted"} />
       <View style={{ flex: 1, gap: space.hair }}>
         <Text variant="bodyStrong">{label}</Text>
         {hint ? (

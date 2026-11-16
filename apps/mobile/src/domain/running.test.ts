@@ -295,24 +295,55 @@ describe("importar de Health Connect", () => {
 
   it("no duplica una sesión ya presente con el mismo externalId", () => {
     const existing: Activity[] = [{ ...imported("hc-1"), id: "act-1" }];
-    const r = mergeImportedActivities(existing, [imported("hc-1"), imported("hc-2")], () => "act-2");
+    const r = mergeImportedActivities(existing, [imported("hc-1"), imported("hc-2", { distanceM: 8000 })], () => "act-2");
     expect(r.addedCount).toBe(1);
     expect(r.activities.map((a) => a.externalId)).toEqual(["hc-2", "hc-1"]);
   });
 
-  it("una actividad importada sin externalId nunca se descarta como duplicada", () => {
+  it("sin externalId solo se fusiona si coincide hora y distancia; si no, entra como nueva", () => {
     const noId = imported("noop", { externalId: undefined });
     const existing: Activity[] = [{ ...noId, id: "act-1" }];
-    const r = mergeImportedActivities(existing, [noId], () => "act-2");
+    const distinta = imported("noop", { externalId: undefined, distanceM: 12_000, durationS: 3600 });
+    const r = mergeImportedActivities(existing, [noId, distinta], () => "act-2");
     expect(r.addedCount).toBe(1);
+    expect(r.activities).toHaveLength(2);
   });
 
-  it("una actividad de Strava convive con una ya importada de Garmin, sin chocar (fuentes y externalId distintos)", () => {
-    const existing: Activity[] = [{ ...imported("hc-1"), id: "act-1" }];
-    const stravaOne = imported("strava-1", { source: "strava", route: [{ lat: 40, lon: -3 }] });
-    const r = mergeImportedActivities(existing, [stravaOne], () => "act-2");
+  it("dos sesiones distintas el mismo día siguen entrando si distancia o hora no coinciden", () => {
+    const existing: Activity[] = [{ ...imported("hc-1"), id: "act-1", startedAt: "2026-09-22T08:00:00.000Z" }];
+    const otra = imported("hc-2", { distanceM: 10_000, startedAt: "2026-09-22T18:00:00.000Z" });
+    const r = mergeImportedActivities(existing, [otra], () => "act-2");
     expect(r.addedCount).toBe(1);
-    expect(r.activities.find((a) => a.externalId === "strava-1")).toMatchObject({ source: "strava" });
+    expect(r.activities).toHaveLength(2);
+  });
+
+  it("Garmin y Strava de la misma carrera se fusionan: una actividad con ruta, sin contar como nueva", () => {
+    const started = "2026-09-22T10:00:00.000Z";
+    const existing: Activity[] = [
+      { ...imported("hc-1"), id: "act-1", source: "garmin", startedAt: started, distanceM: 5000, durationS: 1500 },
+    ];
+    const stravaOne = imported("strava-99", {
+      source: "strava",
+      startedAt: "2026-09-22T10:02:00.000Z",
+      distanceM: 5050,
+      durationS: 1520,
+      route: [
+        { lat: 40, lon: -3 },
+        { lat: 40.001, lon: -3 },
+      ],
+      avgHr: 148,
+    });
+    const r = mergeImportedActivities(existing, [stravaOne], () => "act-2");
+    expect(r.addedCount).toBe(0);
+    expect(r.activities).toHaveLength(1);
+    expect(r.activities[0]).toMatchObject({
+      id: "act-1",
+      externalId: "hc-1",
+      source: "garmin",
+      route: expect.any(Array),
+      avgHr: 148,
+    });
+    expect(r.activities[0]!.route!.length).toBeGreaterThanOrEqual(2);
   });
 });
 

@@ -7,7 +7,7 @@ import { requireUser } from "../auth";
 import { HttpError, logSafeError, perUserKey } from "../http";
 import { AiAnalyzeInput, AiChatInput } from "../schemas";
 import type { AppConfig } from "./ctx";
-import { GEMINI_MODEL } from "../vision";
+import { CHAT_PROVIDER_TIMEOUT_MS, clientAbortSignal, GEMINI_MODEL, withProviderTimeout } from "../vision";
 import type { Register } from "./ctx";
 
 // Modelos configurables por variable de entorno a propósito: los catálogos gratuitos de Gemini y
@@ -95,10 +95,10 @@ function toProposals(toolCalls: { toolName: string; input: unknown }[]): Proposa
   return out;
 }
 
-async function chat(model: LanguageModel, instructions: string, messages: ModelMessage[]) {
+async function chat(model: LanguageModel, instructions: string, messages: ModelMessage[], abortSignal?: AbortSignal) {
   // El system prompt va en `instructions`, no como mensaje: el SDK de IA rechaza mensajes
   // "system" dentro de `messages` (AI_InvalidPromptError) — así se comportan Gemini y Groq.
-  const result = await generateText({ model, instructions, messages, tools });
+  const result = await generateText({ model, instructions, messages, tools, abortSignal });
   return { reply: result.text, proposals: toProposals(result.toolCalls) };
 }
 
@@ -106,13 +106,22 @@ async function chat(model: LanguageModel, instructions: string, messages: ModelM
  * Gemini primero y, si falla (cuota, red, modelo retirado), Groq como respaldo. Lanza 502 si
  * ninguno responde. Compartido por el chat y el análisis de entrenos.
  */
-async function withFallback<T>(cfg: AppConfig, log: FastifyBaseLogger, what: string, run: (model: LanguageModel) => Promise<T>): Promise<T> {
+async function withFallback<T>(
+  cfg: AppConfig,
+  log: FastifyBaseLogger,
+  what: string,
+  run: (model: LanguageModel, abortSignal: AbortSignal) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
   let lastError: unknown;
   if (cfg.geminiApiKey) {
     try {
       const google = createGoogleGenerativeAI({ apiKey: cfg.geminiApiKey });
-      return await run(google(GEMINI_MODEL));
+      return await withProviderTimeout(CHAT_PROVIDER_TIMEOUT_MS, signal, (abortSignal) =>
+        run(google(GEMINI_MODEL), abortSignal),
+      );
     } catch (err) {
+      if (signal?.aborted) throw err;
       lastError = err;
       log.warn({ err: logSafeError(err) }, `${what}: Gemini falló, probando con Groq`);
     }
@@ -120,8 +129,9 @@ async function withFallback<T>(cfg: AppConfig, log: FastifyBaseLogger, what: str
   if (cfg.groqApiKey) {
     try {
       const groq = createGroq({ apiKey: cfg.groqApiKey });
-      return await run(groq(GROQ_MODEL));
+      return await withProviderTimeout(CHAT_PROVIDER_TIMEOUT_MS, signal, (abortSignal) => run(groq(GROQ_MODEL), abortSignal));
     } catch (err) {
+      if (signal?.aborted) throw err;
       lastError = err;
     }
   }
@@ -183,7 +193,8 @@ export const registerAi: Register = (app, { db, cfg }) => {
     const instructions = `${SECTION_PROMPT[body.section]}\n\n${COMMON_PROMPT}\n\nContexto de la persona:\n${body.context}`;
     const messages: ModelMessage[] = body.messages.map((m) => ({ role: m.role, content: m.content }) as ModelMessage);
 
-    return withFallback(cfg, req.log, "Asistente", (model) => chat(model, instructions, messages));
+    const signal = clientAbortSignal(req);
+    return withFallback(cfg, req.log, "Asistente", (model, abortSignal) => chat(model, instructions, messages, abortSignal), signal);
   });
 
   // Análisis de un entreno, una carrera o una semana. El móvil manda los números ya calculados
@@ -193,11 +204,12 @@ export const registerAi: Register = (app, { db, cfg }) => {
     if (!cfg.geminiApiKey && !cfg.groqApiKey) throw new HttpError(503, "La IA no está configurada todavía");
     const body = AiAnalyzeInput.parse(req.body);
     const instructions = `${ANALYZE_PROMPT[body.kind]}\n\n${ANALYZE_COMMON}${body.goal ? `\n\nObjetivo de la persona: ${body.goal}` : ""}`;
-    return withFallback(cfg, req.log, "Análisis", async (model) => {
-      const result = await generateText({ model, instructions, prompt: body.data, output: Output.object({ schema: AnalysisSchema }) });
+    const signal = clientAbortSignal(req);
+    return withFallback(cfg, req.log, "Análisis", async (model, abortSignal) => {
+      const result = await generateText({ model, instructions, prompt: body.data, output: Output.object({ schema: AnalysisSchema }), abortSignal });
       const parsed = AnalysisSchema.safeParse(result.output);
       if (!parsed.success) throw new Error("La IA devolvió un análisis con forma inválida");
       return { analysis: parsed.data };
-    });
+    }, signal);
   });
 };

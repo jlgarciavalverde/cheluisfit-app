@@ -18,9 +18,10 @@ export class ApiError extends Error {
   }
 }
 
-const REQUEST_TIMEOUT_MS = 8000;
+// 12 s: margen para el túnel Cloudflare + VPS sin alargar tanto como las rutas de IA.
+const REQUEST_TIMEOUT_MS = 12000;
 const UPLOAD_TIMEOUT_MS = 30000; // fotos/vídeos pesan más y suben más despacio que una petición normal
-// El chat espera a que el servidor llame a Gemini (y, si falla, a Groq): bastante más que 8 s.
+// El chat espera a que el servidor llame a Gemini (y, si falla, a Groq): bastante más que 12 s.
 const AI_CHAT_TIMEOUT_MS = 45000;
 // Las llamadas de IA con foto, además de subir la imagen, esperan a que el servidor llame a
 // Gemini y este responda — ese viaje de ida y vuelta puede tardar bastante más que una subida
@@ -71,23 +72,34 @@ async function fetchJson<T>(url: string, init: RequestInit, timeoutMs: number): 
   }
 }
 
+/**
+ * Un reintento solo ante fallo de red inmediato (status 0, no timeout) y solo en GET: un blip
+ * del túnel no debe romper sync/social; un POST no se reintenta aquí (puede haber hecho efecto).
+ */
 async function request<T>(
   path: string,
   opts: { method?: string; token?: string | null; body?: unknown; headers?: Record<string, string>; timeoutMs?: number } = {},
 ): Promise<T> {
-  return fetchJson<T>(
-    `${API_BASE}${path}`,
-    {
-      method: opts.method ?? "GET",
-      headers: {
-        ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
-        ...opts.headers,
-      },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+  const method = opts.method ?? "GET";
+  const init: RequestInit = {
+    method,
+    headers: {
+      ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
+      ...opts.headers,
     },
-    opts.timeoutMs ?? REQUEST_TIMEOUT_MS,
-  );
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+  };
+  const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const url = `${API_BASE}${path}`;
+  try {
+    return await fetchJson<T>(url, init, timeoutMs);
+  } catch (e) {
+    const err = toApiError(e);
+    const idempotentGet = method === "GET" && opts.body === undefined;
+    if (!idempotentGet || err.status !== 0 || err.message === TIMEOUT_MESSAGE) throw err;
+    return fetchJson<T>(url, init, timeoutMs);
+  }
 }
 
 /**

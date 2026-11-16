@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { router } from "expo-router";
 import { Screen, ScreenHeader } from "@/components/Screen";
-import { ActionList, ActionRow, BottomSheet, Button, Callout, Card, EmptyState, IconButton, ListGroup, ListRow, Section, SegmentedControl, Skeleton, Text } from "@/components/ui";
+import { ActionList, ActionRow, BottomSheet, Button, Callout, Card, ConfirmSheet, EmptyState, IconButton, ListGroup, ListRow, Section, SegmentedControl, Skeleton, Text } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { FridgeItemSheet } from "@/components/fridge/FridgeItemSheet";
 import { api, ApiError } from "@/data/api";
@@ -11,7 +11,7 @@ import { useAiPanel } from "@/data/aiPanelStore";
 import { useAuth } from "@/data/authStore";
 import { useNutrition, useTargets } from "@/data/store";
 import { todayKey } from "@/domain/dates";
-import { CATEGORY_LABEL, daysSinceScan, fmtQuantity, groupByPlace, ZONE_LABEL, type FridgeItem } from "@/domain/fridge";
+import { CATEGORY_LABEL, daysSinceScan, fmtQuantity, groupByPlace, staleFridgeItems, ZONE_LABEL, type FridgeItem } from "@/domain/fridge";
 import { sumNutrients } from "@/domain/nutrition";
 import { space } from "@/theme/tokens";
 
@@ -55,10 +55,15 @@ export default function FridgeScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<FridgeItem | null | "new">(null);
   const [no3d, setNo3d] = useState(false);
+  // Última foto + modo: un fallo de red/IA no obliga a volver a sacar la foto («Reintentar»).
+  const [lastScan, setLastScan] = useState<{ uri: string; mode: "replace" | "add" } | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [confirmStale, setConfirmStale] = useState(false);
 
   const selected = fridge.items.find((i) => i.id === selectedId) ?? null;
   const days = daysSinceScan(fridge.lastScannedAt);
   const empty = fridge.items.length === 0;
+  const doubtful = staleFridgeItems(fridge);
 
   const remove = (item: FridgeItem) => {
     removeFridgeItem(item.id);
@@ -66,14 +71,13 @@ export default function FridgeScreen() {
     toast(`«${item.name}» quitado`, { actionLabel: "Deshacer", onAction: () => upsertFridgeItem(item) });
   };
 
-  const scan = async (source: "camera" | "library", mode: "replace" | "add") => {
-    setAskMode(null);
+  const runFridgeScan = async (uri: string, mode: "replace" | "add") => {
     if (!token) {
       toast("Inicia sesión para escanear la nevera", { actionLabel: "Entrar", onAction: () => router.push("/cuenta") });
       return;
     }
-    const uri = await captureAiPhoto(source);
-    if (!uri) return;
+    setLastScan({ uri, mode });
+    setScanError(null);
     setScanning(true);
     const before = fridge;
     try {
@@ -84,16 +88,35 @@ export default function FridgeScreen() {
       }
       applyFridgeScan(result, mode);
       setSelectedId(null);
+      setLastScan(null);
       const n = result.items.length;
       toast(`${n} ${n === 1 ? "alimento" : "alimentos"} ${mode === "add" ? (n === 1 ? "añadido" : "añadidos") : "en la nevera"}${result.positioned ? "" : " (sin sitio exacto: colócalos si quieres)"}`, {
         actionLabel: "Deshacer",
         onAction: () => setFridge(before),
       });
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : "No se pudo analizar la foto");
+      const message =
+        e instanceof ApiError
+          ? e.status === 429
+            ? e.message || "Has llegado al límite de análisis con foto por hora. Prueba más tarde."
+            : e.message
+          : "No se pudo analizar la foto";
+      setScanError(message);
+      toast(message);
     } finally {
       setScanning(false);
     }
+  };
+
+  const scan = async (source: "camera" | "library", mode: "replace" | "add") => {
+    setAskMode(null);
+    if (!token) {
+      toast("Inicia sesión para escanear la nevera", { actionLabel: "Entrar", onAction: () => router.push("/cuenta") });
+      return;
+    }
+    const uri = await captureAiPhoto(source);
+    if (!uri) return;
+    await runFridgeScan(uri, mode);
   };
 
   // Con algo ya en la nevera se pregunta si la foto es de toda la nevera o de una parte.
@@ -140,6 +163,26 @@ export default function FridgeScreen() {
             <Button testID="scan-fridge-library" label="De la galería" icon="images-outline" size="lg" variant="secondary" fullWidth disabled={scanning} onPress={() => startScan("library")} />
           </View>
         </View>
+
+        {scanError && lastScan ? (
+          <Callout
+            tone="danger"
+            icon="alert-circle-outline"
+            testID="fridge-scan-error"
+            action={
+              <Button
+                testID="fridge-scan-retry"
+                label="Reintentar"
+                size="sm"
+                variant="secondary"
+                disabled={scanning}
+                onPress={() => runFridgeScan(lastScan.uri, lastScan.mode)}
+              />
+            }
+          >
+            {scanError}
+          </Callout>
+        ) : null}
 
         {empty ? (
           <EmptyState
@@ -205,6 +248,15 @@ export default function FridgeScreen() {
 
         <ActionList>
           <ActionRow testID="fridge-add-manual" icon="add-circle-outline" label="Añadir a mano" hint="Algo que la foto no vio" onPress={() => setEditing("new")} />
+          {doubtful.length > 0 ? (
+            <ActionRow
+              testID="fridge-remove-doubtful"
+              icon="help-circle-outline"
+              label="Quitar lo dudoso"
+              hint={`${doubtful.length} ${doubtful.length === 1 ? "alimento" : "alimentos"}`}
+              onPress={() => setConfirmStale(true)}
+            />
+          ) : null}
           {!empty ? (
             <ActionRow
               testID="clear-fridge"
@@ -221,6 +273,26 @@ export default function FridgeScreen() {
           ) : null}
         </ActionList>
       </View>
+
+      <ConfirmSheet
+        visible={confirmStale}
+        onClose={() => setConfirmStale(false)}
+        title="¿Quitar lo dudoso?"
+        message={`Se quitarán ${doubtful.length} ${doubtful.length === 1 ? "alimento" : "alimentos"} que puede que ya no estén o lleven mucho sin revisar.`}
+        confirmLabel="Quitar"
+        tone="danger"
+        onConfirm={() => {
+          const before = fridge;
+          const ids = new Set(doubtful.map((i) => i.id));
+          setFridge({ ...fridge, items: fridge.items.filter((i) => !ids.has(i.id)) });
+          if (selectedId && ids.has(selectedId)) setSelectedId(null);
+          setConfirmStale(false);
+          toast(`${doubtful.length} ${doubtful.length === 1 ? "alimento quitado" : "alimentos quitados"}`, {
+            actionLabel: "Deshacer",
+            onAction: () => setFridge(before),
+          });
+        }}
+      />
 
       <BottomSheet visible={askMode !== null} onClose={() => setAskMode(null)} title="¿Qué sale en la foto?" subtitle="Así sé si sustituir la lista o sumarle cosas">
         <ActionList>

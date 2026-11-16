@@ -179,7 +179,19 @@ export function AccountSection() {
           )}
           <ConflictBackups refreshKey={`${syncNotice}-${lastSyncedAt}`} />
           <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
-            <Button testID="sync-now" label="Sincronizar ahora" icon="sync" variant="secondary" size="sm" disabled={syncing} onPress={() => syncNow().then(() => toast("Sincronizado")).catch(() => toast("No se pudo sincronizar"))} />
+            <Button
+              testID="sync-now"
+              label="Sincronizar ahora"
+              icon="sync"
+              variant="secondary"
+              size="sm"
+              disabled={syncing}
+              onPress={() =>
+                syncNow()
+                  .then(() => toast("Sincronizado"))
+                  .catch((e) => toast(e instanceof ApiError ? e.message : "No se pudo sincronizar"))
+              }
+            />
             <Button
               testID="go-social-profile"
               label="Mi perfil social"

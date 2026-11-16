@@ -1,7 +1,9 @@
 // Fuente de actividades (Garmin vía Health Connect o Strava), su estado y el botón de
 // sincronizar, con los avisos de permisos. Sacado de `(tabs)/running.tsx`.
-import { useEffect, useState } from "react";
-import { View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Platform, View } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
+import { File } from "expo-file-system";
 import { Button, Callout, SegmentedControl, Text } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { api } from "@/data/api";
@@ -10,6 +12,7 @@ import { checkHealthConnectStatus, openAppSettings, openHealthConnectInstall, op
 import { useRunning } from "@/data/runningStore";
 import { connectStrava } from "@/data/stravaAuth";
 import { dayLabel, toDateKey, todayKey } from "@/domain/dates";
+import { parseGpx } from "@/domain/gpx";
 import { space } from "@/theme/tokens";
 
 function syncLabel(iso: string | null): string {
@@ -24,10 +27,17 @@ function syncLabel(iso: string | null): string {
   return day === todayKey() ? `Sincronizado a las ${time}` : `Sincronizado ${dayLabel(day, todayKey()).toLowerCase()} a las ${time}`;
 }
 
+type SyncFailure = { source: "garmin" | "strava"; message: string };
+
 export function SyncPanel() {
   const [syncing, setSyncing] = useState(false);
   const [permissionHelp, setPermissionHelp] = useState(false);
   const [stravaBusy, setStravaBusy] = useState(false);
+  const [syncError, setSyncError] = useState<SyncFailure | null>(null);
+  const [gpxBusy, setGpxBusy] = useState(false);
+  const [gpxError, setGpxError] = useState<string | null>(null);
+  const [lastGpxName, setLastGpxName] = useState<string | null>(null);
+  const gpxInputRef = useRef<HTMLInputElement | null>(null);
   const token = useAuth((s) => s.token);
   const lastSync = useRunning((s) => s.lastSync);
   const lastStravaSync = useRunning((s) => s.lastStravaSync);
@@ -37,6 +47,7 @@ export function SyncPanel() {
   const setSource = useRunning((s) => s.setSource);
   const markSynced = useRunning((s) => s.markSynced);
   const markStravaSynced = useRunning((s) => s.markStravaSynced);
+  const addActivity = useRunning((s) => s.addActivity);
 
   // Refleja el estado real del servidor (p. ej. tras desconectar desde otro dispositivo, o en
   // el primer arranque de este) — `stravaConnected` local es solo una caché de esto.
@@ -64,10 +75,12 @@ export function SyncPanel() {
         }
         setStravaConnected(true);
       }
+      setSyncError(null);
       const n = await markStravaSynced(token);
       toast(n > 0 ? `${n} actividad${n === 1 ? "" : "es"} nueva${n === 1 ? "" : "s"} de Strava` : "Strava sincronizado · sin actividades nuevas");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "No se pudo sincronizar con Strava. Inténtalo de nuevo.");
+      const message = e instanceof Error ? e.message : "No se pudo sincronizar con Strava. Inténtalo de nuevo.";
+      setSyncError({ source: "strava", message });
     } finally {
       setStravaBusy(false);
     }
@@ -76,6 +89,7 @@ export function SyncPanel() {
   const syncGarmin = async () => {
     setSyncing(true);
     setPermissionHelp(false);
+    setSyncError(null);
     try {
       const status = await checkHealthConnectStatus();
       if (status === "not_installed") {
@@ -102,12 +116,57 @@ export function SyncPanel() {
       const n = await markSynced();
       toast(n > 0 ? `${n} actividad${n === 1 ? "" : "es"} nueva${n === 1 ? "" : "s"}` : "Garmin sincronizado · sin actividades nuevas");
     } catch (e) {
-      // El mensaje real (de `healthConnect.ts` o de la librería nativa) llega hasta aquí en vez
-      // de perderse detrás de un "no se pudo sincronizar" genérico.
-      toast(e instanceof Error ? e.message : "No se pudo sincronizar con Garmin. Inténtalo de nuevo.");
+      const message = e instanceof Error ? e.message : "No se pudo sincronizar con Garmin. Inténtalo de nuevo.";
+      setSyncError({ source: "garmin", message });
     } finally {
       setSyncing(false);
     }
+  };
+
+  const importGpxFromText = (xml: string, name: string) => {
+    setGpxBusy(true);
+    setGpxError(null);
+    setLastGpxName(name);
+    try {
+      const base = name.replace(/\.gpx$/i, "").trim();
+      const parsed = parseGpx(xml, base || "Importado GPX");
+      if (!parsed.ok) {
+        setGpxError(parsed.message);
+        return;
+      }
+      addActivity(parsed.activity);
+      toast(`Carrera importada · ${base || "GPX"}`);
+    } catch (e) {
+      setGpxError(e instanceof Error ? e.message : "No se pudo leer el fichero GPX");
+    } finally {
+      setGpxBusy(false);
+    }
+  };
+
+  const pickGpx = async () => {
+    if (Platform.OS === "web") {
+      gpxInputRef.current?.click();
+      return;
+    }
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ type: ["application/gpx+xml", "application/xml", "text/xml", "*/*"], copyToCacheDirectory: true });
+      if (res.canceled || !res.assets?.[0]) return;
+      const asset = res.assets[0];
+      const name = asset.name ?? "importado.gpx";
+      const file = new File(asset.uri);
+      const xml = await file.text();
+      importGpxFromText(xml, name);
+    } catch (e) {
+      setGpxError(e instanceof Error ? e.message : "No se pudo abrir el fichero GPX");
+    }
+  };
+
+  const retryGpx = async () => {
+    if (Platform.OS === "web") {
+      gpxInputRef.current?.click();
+      return;
+    }
+    await pickGpx();
   };
 
   return (
@@ -167,6 +226,70 @@ export function SyncPanel() {
         >
           Strava no está conectado (la API exige suscripción de pago). Tu reloj escribe sus sesiones
           en Garmin — vuelve a Garmin para traerlas.
+        </Callout>
+      ) : null}
+
+      {syncError ? (
+        <Callout
+          tone="danger"
+          icon="alert-circle-outline"
+          testID="sync-error"
+          action={
+            <Button
+              testID="sync-retry"
+              label="Reintentar"
+              size="sm"
+              variant="secondary"
+              disabled={syncing || stravaBusy}
+              onPress={syncError.source === "garmin" ? syncGarmin : connectAndSyncStrava}
+            />
+          }
+        >
+          {syncError.message}
+        </Callout>
+      ) : null}
+
+      <Button
+        testID="import-gpx"
+        label={gpxBusy ? "Leyendo GPX…" : "Importar GPX"}
+        icon="map-outline"
+        variant="secondary"
+        size="sm"
+        fullWidth
+        disabled={gpxBusy}
+        onPress={pickGpx}
+      />
+
+      {Platform.OS === "web" ? (
+        <input
+          ref={gpxInputRef}
+          type="file"
+          accept=".gpx,application/gpx+xml,text/xml"
+          style={{ display: "none" }}
+          onChange={(ev) => {
+            const file = ev.target.files?.[0];
+            ev.target.value = "";
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result === "string") importGpxFromText(reader.result, file.name);
+            };
+            reader.onerror = () => setGpxError("No se pudo leer el fichero GPX");
+            reader.readAsText(file);
+          }}
+        />
+      ) : null}
+
+      {gpxError ? (
+        <Callout
+          tone="danger"
+          icon="alert-circle-outline"
+          testID="gpx-import-error"
+          action={
+            <Button testID="gpx-import-retry" label="Reintentar" size="sm" variant="secondary" disabled={gpxBusy} onPress={retryGpx} />
+          }
+        >
+          {lastGpxName ? `${gpxError} (${lastGpxName})` : gpxError}
         </Callout>
       ) : null}
 

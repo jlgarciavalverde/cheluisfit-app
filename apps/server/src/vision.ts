@@ -1,6 +1,6 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
-import { generateText, Output, type ModelMessage } from "ai";
+import { generateText, Output, type LanguageModel, type ModelMessage } from "ai";
 import type { z } from "zod";
 import type { FastifyBaseLogger, FastifyRequest } from "fastify";
 import { HttpError, logSafeError } from "./http";
@@ -10,16 +10,24 @@ export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 /** Respaldo con visión en Groq (desde la 0.18; el `GROQ_MODEL` del chat no ve fotos). */
 export const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
 
-const UNAVAILABLE = "La IA con foto no está disponible ahora mismo";
+/** Por intento de proveedor en chat/análisis: deja margen para el respaldo dentro del timeout del móvil (45 s). */
+export const CHAT_PROVIDER_TIMEOUT_MS = 20_000;
+/** Por intento de proveedor en visión: deja margen para el respaldo dentro del presupuesto total. */
+export const PROVIDER_TIMEOUT_MS = 22_000;
+/** Presupuesto de toda la petición (el cliente aborta a 60 s). */
+export const VISION_BUDGET_MS = 50_000;
+
+const NOT_CONFIGURED = "La IA con foto no está configurada todavía";
+const UNAVAILABLE = "La IA no responde ahora mismo, prueba en un rato";
 
 /** Antes de leer nada: sin clave no tiene sentido recibir hasta 16 MB de fotos para nada. */
 export function requireVisionKey(cfg: AppConfig): void {
-  if (!cfg.geminiApiKey && !cfg.groqApiKey) throw new HttpError(503, UNAVAILABLE);
+  if (!cfg.geminiApiKey && !cfg.groqApiKey) throw new HttpError(503, NOT_CONFIGURED);
 }
 
 /** Modelos con visión por orden: Gemini y, si falla o no hay clave, el de visión de Groq. */
-function visionModels(cfg: AppConfig) {
-  const out = [];
+function visionModels(cfg: AppConfig): { name: string; model: LanguageModel }[] {
+  const out: { name: string; model: LanguageModel }[] = [];
   if (cfg.geminiApiKey) out.push({ name: "Gemini", model: createGoogleGenerativeAI({ apiKey: cfg.geminiApiKey })(GEMINI_MODEL) });
   if (cfg.groqApiKey) out.push({ name: "Groq", model: createGroq({ apiKey: cfg.groqApiKey })(GROQ_VISION_MODEL) });
   return out;
@@ -31,6 +39,87 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export interface ImagePart {
   buffer: Buffer;
   mediaType: string;
+}
+
+export type VisionCallOpts = {
+  log?: FastifyBaseLogger;
+  /** Proveedores a saltar (p. ej. los que ya fallaron con 404/401 en structured). */
+  skip?: ReadonlySet<string>;
+  /** Señal del presupuesto total de la petición. */
+  signal?: AbortSignal;
+};
+
+/** 404 (modelo retirado), 401/403 (clave): no merece reintentar ese proveedor en la misma petición. */
+export function isHardVisionError(e: unknown): boolean {
+  const status = (e as { statusCode?: number; status?: number } | null)?.statusCode ?? (e as { status?: number } | null)?.status;
+  return status === 404 || status === 401 || status === 403;
+}
+
+/** AbortController que corta a los `ms` (presupuesto de nevera/producto). */
+export function startVisionBudget(ms = VISION_BUDGET_MS): AbortController {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  (t as NodeJS.Timeout).unref?.();
+  return c;
+}
+
+/** Aborta si el cliente cierra la conexión HTTP (p. ej. abort del fetch en el móvil). */
+export function clientAbortSignal(req: FastifyRequest): AbortSignal {
+  const c = new AbortController();
+  const raw = req.raw;
+  if (raw.aborted) {
+    c.abort();
+    return c.signal;
+  }
+  const abort = () => c.abort();
+  raw.once("close", abort);
+  raw.once("aborted", abort);
+  return c.signal;
+}
+
+/** Aborta cuando cualquiera de las señales padre aborta (presupuesto + cierre de cliente…). */
+export function mergeAbortSignals(signals: AbortSignal[]): AbortSignal {
+  const c = new AbortController();
+  const onAbort = () => {
+    if (!c.signal.aborted) c.abort();
+  };
+  for (const s of signals) {
+    if (s.aborted) {
+      onAbort();
+      return c.signal;
+    }
+    s.addEventListener("abort", onAbort);
+  }
+  return c.signal;
+}
+
+function assertBudget(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new HttpError(502, UNAVAILABLE);
+}
+
+/**
+ * Corre `run` con un timeout por proveedor y, si hay señal de presupuesto, la combina.
+ * Pasa `abortSignal` a `generateText` para que el SDK pueda cancelar la petición HTTP.
+ */
+export async function withProviderTimeout<T>(ms: number, signal: AbortSignal | undefined, run: (abortSignal: AbortSignal) => Promise<T>): Promise<T> {
+  assertBudget(signal);
+  const local = new AbortController();
+  const onParent = () => local.abort();
+  signal?.addEventListener("abort", onParent);
+  const timer = setTimeout(() => local.abort(), ms);
+  try {
+    return await run(local.signal);
+  } catch (e) {
+    if (local.signal.aborted && !(e instanceof HttpError)) {
+      throw Object.assign(e instanceof Error ? e : new Error(String(e)), {
+        statusCode: (e as { statusCode?: number }).statusCode ?? 408,
+      });
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onParent);
+  }
 }
 
 /**
@@ -71,10 +160,18 @@ export async function readImages(req: FastifyRequest, required: string[], option
   return out;
 }
 
+function userMessages(images: ImagePart[], text: string): ModelMessage[] {
+  return [
+    {
+      role: "user",
+      content: [{ type: "text", text }, ...images.map((img) => ({ type: "image" as const, image: img.buffer, mediaType: img.mediaType }))],
+    },
+  ];
+}
+
 /**
  * Llamada de IA con imágenes: Gemini y, si falla, `GROQ_VISION_MODEL` (un modelo de Groq que sí
- * ve fotos; el `GROQ_MODEL` del chat no). Desde la 0.18 — antes era solo Gemini y una clave de
- * Gemini caducada dejaba la Nevera y el escaneo por foto sin funcionar. 503 si fallan los dos.
+ * ve fotos; el `GROQ_MODEL` del chat no). 502 si fallan los dos (hay claves); 503 solo sin claves.
  */
 export async function callVision(
   cfg: AppConfig,
@@ -82,30 +179,32 @@ export async function callVision(
   images: ImagePart[],
   text: string,
   tools?: Parameters<typeof generateText>[0]["tools"],
-  log?: FastifyBaseLogger,
+  opts: VisionCallOpts = {},
 ): Promise<{ reply: string; toolCalls: { toolName: string; input: unknown }[] }> {
   requireVisionKey(cfg);
 
-  const messages: ModelMessage[] = [
-    {
-      role: "user",
-      content: [{ type: "text", text }, ...images.map((img) => ({ type: "image" as const, image: img.buffer, mediaType: img.mediaType }))],
-    },
-  ];
+  const messages = userMessages(images, text);
+  const skip = opts.skip ?? new Set<string>();
+  let tried = 0;
 
   for (const { name, model } of visionModels(cfg)) {
+    if (skip.has(name)) continue;
+    assertBudget(opts.signal);
+    tried++;
     try {
-      const result = await generateText({ model, instructions, messages, tools });
+      const result = await withProviderTimeout(PROVIDER_TIMEOUT_MS, opts.signal, (abortSignal) =>
+        generateText({ model, instructions, messages, tools, abortSignal }),
+      );
       return { reply: result.text, toolCalls: result.toolCalls };
     } catch (e) {
       // El motivo real (clave caducada, modelo retirado por Google…) tiene que quedar en el log:
       // sin esto el fallo era indistinguible de «falta la clave». Solo el resumen
       // (`logSafeError`): el error del SDK lleva la foto en base64 dentro.
-      if (log) log.error({ err: logSafeError(e) }, `[vision] la llamada a ${name} falló`);
+      if (opts.log) opts.log.error({ err: logSafeError(e) }, `[vision] la llamada a ${name} falló`);
       else console.error(`[vision] la llamada a ${name} falló:`, logSafeError(e));
     }
   }
-  throw new HttpError(503, UNAVAILABLE);
+  throw new HttpError(502, UNAVAILABLE);
 }
 
 /**
@@ -113,7 +212,8 @@ export async function callVision(
  * estructurada (`Output.object`); el modelo de visión de Groq no la admite con fotos («Generated
  * JSON does not match the expected schema», comprobado en producción), así que a él se le pide el
  * JSON en el texto con un ejemplo y se pasa por `coerce` (que arregla zonas/categorías que no
- * existen, nombres en inglés no, eso no) antes de validarlo. `null` si ninguno da algo válido.
+ * existen, nombres en inglés no, eso no) antes de validarlo. `data: null` si ninguno da algo
+ * válido; `hardFailed` lista los proveedores que no merece reintentar en el plan B.
  */
 export async function callVisionObject<S extends z.ZodType>(
   cfg: AppConfig,
@@ -121,37 +221,44 @@ export async function callVisionObject<S extends z.ZodType>(
   images: ImagePart[],
   text: string,
   schema: S,
-  log?: FastifyBaseLogger,
-  json?: { example: unknown; coerce: (raw: unknown) => unknown },
-): Promise<z.infer<S> | null> {
+  opts: VisionCallOpts & { json?: { example: unknown; coerce: (raw: unknown) => unknown } } = {},
+): Promise<{ data: z.infer<S> | null; hardFailed: Set<string> }> {
   requireVisionKey(cfg);
-  const messages: ModelMessage[] = [
-    {
-      role: "user",
-      content: [{ type: "text", text }, ...images.map((img) => ({ type: "image" as const, image: img.buffer, mediaType: img.mediaType }))],
-    },
-  ];
+  const messages = userMessages(images, text);
+  const hardFailed = new Set<string>();
+  const skip = opts.skip ?? new Set<string>();
+
   for (const { name, model } of visionModels(cfg)) {
+    if (skip.has(name)) continue;
+    assertBudget(opts.signal);
     try {
       let raw: unknown;
-      if (name === "Gemini" || !json) {
-        raw = (await generateText({ model, instructions, messages, output: Output.object({ schema }) })).output;
+      if (name === "Gemini" || !opts.json) {
+        raw = (
+          await withProviderTimeout(PROVIDER_TIMEOUT_MS, opts.signal, (abortSignal) =>
+            generateText({ model, instructions, messages, output: Output.object({ schema }), abortSignal }),
+          )
+        ).output;
       } else {
-        const r = await generateText({
-          model,
-          instructions: `${instructions}\n\nResponde SOLO con un objeto JSON, sin texto alrededor, con esta forma (ejemplo): ${JSON.stringify(json.example)}`,
-          messages,
-        });
+        const r = await withProviderTimeout(PROVIDER_TIMEOUT_MS, opts.signal, (abortSignal) =>
+          generateText({
+            model,
+            instructions: `${instructions}\n\nResponde SOLO con un objeto JSON, sin texto alrededor, con esta forma (ejemplo): ${JSON.stringify(opts.json!.example)}`,
+            messages,
+            abortSignal,
+          }),
+        );
         const m = r.text.match(/\{[\s\S]*\}/);
-        raw = m ? json.coerce(JSON.parse(m[0])) : null;
+        raw = m ? opts.json.coerce(JSON.parse(m[0])) : null;
       }
       const parsed = schema.safeParse(raw);
-      if (parsed.success) return parsed.data;
-      if (log) log.warn(`[vision] ${name} devolvió un objeto con forma inválida`);
+      if (parsed.success) return { data: parsed.data, hardFailed };
+      if (opts.log) opts.log.warn(`[vision] ${name} devolvió un objeto con forma inválida`);
     } catch (e) {
-      if (log) log.warn({ err: logSafeError(e) }, `[vision] la salida estructurada de ${name} falló`);
+      if (isHardVisionError(e)) hardFailed.add(name);
+      if (opts.log) opts.log.warn({ err: logSafeError(e) }, `[vision] la salida estructurada de ${name} falló`);
       else console.warn(`[vision] la salida estructurada de ${name} falló:`, logSafeError(e));
     }
   }
-  return null;
+  return { data: null, hardFailed };
 }

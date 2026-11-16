@@ -155,7 +155,8 @@ export const useRunning = create<RunningState>()(
       },
       addActivity: (a) => {
         const id = `act-${uid()}`;
-        set((s) => ({ activities: [{ ...a, id }, ...s.activities] }));
+        const route = "route" in a ? { route: compactRoute(a.route) } : {};
+        set((s) => ({ activities: [{ ...a, ...route, id }, ...s.activities] }));
         get().relink();
         return id;
       },
@@ -240,7 +241,7 @@ export const useRunning = create<RunningState>()(
           .map((a) => ({ date: a.date, source: "garmin" as const, title: a.title, durationS: a.durationS, distanceM: a.distanceM, avgHr: a.avgHr, maxHr: a.maxHr, kcal: a.kcal, externalId: a.externalId }));
         const { activities, addedCount } = mergeImportedActivities(get().activities, runs, () => `act-${uid()}`, get().dismissedExternalIds);
         const { matches, addedCount: addedMatches } = mergeImportedMatches(get().matches, games, () => `match-${uid()}`, get().dismissedExternalIds);
-        if (addedCount > 0) set({ activities });
+        set({ activities });
         if (addedMatches > 0) set({ matches });
         set({ lastSync: new Date().toISOString() });
         get().relink();
@@ -251,7 +252,7 @@ export const useRunning = create<RunningState>()(
       markStravaSynced: async (token) => {
         const { activities: imported, until } = await api.stravaSync(token, get().lastStravaSync);
         const { activities, addedCount } = mergeImportedActivities(get().activities, imported, () => `act-${uid()}`, get().dismissedExternalIds);
-        if (addedCount > 0) set({ activities });
+        set({ activities });
         set({ lastStravaSync: until ?? new Date().toISOString() });
         get().relink();
         return addedCount;

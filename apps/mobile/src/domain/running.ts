@@ -162,6 +162,8 @@ export interface Activity {
   id: string;
   /** YYYY-MM-DD */
   date: string;
+  /** Inicio ISO (Strava, GPX…). Sirve para deduplicar importaciones de la misma sesión. */
+  startedAt?: string;
   type: "run" | "walk";
   /** `strava` sustituye a `garmin` para carreras/caminatas: trae ruta+FC+calorías en una sola
    *  fuente, algo que Health Connect nunca expone (Garmin no comparte GPS por ahí). */
@@ -315,6 +317,52 @@ export function dailyMeters(acts: readonly Activity[], today: string): number[] 
   return out;
 }
 
+const DEDUPE_START_MS = 3 * 60 * 1000;
+const DEDUPE_DIST_FRAC = 0.05;
+const DEDUPE_DIST_MIN_M = 150;
+
+function activityStartMs(a: Pick<Activity, "startedAt" | "date" | "durationS">): number | null {
+  if (a.startedAt) {
+    const t = new Date(a.startedAt).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+  return null;
+}
+
+/** Distancia «suficientemente igual» para considerar la misma sesión (±5 %, mín. ±150 m). */
+export function nearSameDistance(aM: number, bM: number): boolean {
+  const tol = Math.max(DEDUPE_DIST_MIN_M, Math.max(aM, bM) * DEDUPE_DIST_FRAC);
+  return Math.abs(aM - bM) <= tol;
+}
+
+function nearSameStart(existing: Activity, incoming: Omit<Activity, "id">): boolean {
+  const ea = activityStartMs(existing);
+  const ia = activityStartMs(incoming);
+  if (ea !== null && ia !== null) return Math.abs(ea - ia) <= DEDUPE_START_MS;
+  if (existing.date !== incoming.date) return false;
+  return Math.abs(existing.durationS - incoming.durationS) <= DEDUPE_START_MS / 1000;
+}
+
+function findFuzzyDuplicate(existing: readonly Activity[], incoming: Omit<Activity, "id">): Activity | undefined {
+  return existing.find((e) => e.type === incoming.type && nearSameDistance(e.distanceM, incoming.distanceM) && nearSameStart(e, incoming));
+}
+
+/** Rellena huecos de la actividad local con lo que trae el import sin pisar datos ya guardados. */
+export function enrichActivity(existing: Activity, incoming: Omit<Activity, "id">): Activity {
+  const route = existing.route?.length ? existing.route : compactRoute(incoming.route);
+  return {
+    ...existing,
+    route,
+    avgHr: existing.avgHr ?? incoming.avgHr,
+    maxHr: existing.maxHr ?? incoming.maxHr,
+    kcal: existing.kcal ?? incoming.kcal,
+    ascentM: existing.ascentM ?? incoming.ascentM,
+    laps: existing.laps?.length ? existing.laps : incoming.laps,
+    startedAt: existing.startedAt ?? incoming.startedAt,
+    externalId: existing.externalId ?? incoming.externalId,
+  };
+}
+
 /**
  * Añade lo importado de Health Connect a las actividades ya guardadas, sin duplicar por
  * `externalId` (una sesión ya importada en un sync anterior no vuelve a entrar). Pura, para
@@ -329,8 +377,20 @@ export function mergeImportedActivities(
 ): { activities: Activity[]; addedCount: number } {
   const known = new Set([...existing.map((a) => a.externalId).filter((x): x is string => !!x), ...dismissed]);
   const fresh = imported.filter((a) => !a.externalId || !known.has(a.externalId));
-  const added = fresh.map((a) => ({ ...a, id: makeId(), route: compactRoute(a.route) }));
-  return { activities: [...added, ...existing], addedCount: fresh.length };
+  let activities = [...existing];
+  let addedCount = 0;
+  const prepend: Activity[] = [];
+  for (const a of fresh) {
+    const dup = findFuzzyDuplicate(activities, a);
+    if (dup) {
+      const enriched = enrichActivity(dup, a);
+      activities = activities.map((x) => (x.id === dup.id ? enriched : x));
+      continue;
+    }
+    prepend.push({ ...a, id: makeId(), route: compactRoute(a.route) });
+    addedCount += 1;
+  }
+  return { activities: [...prepend, ...activities], addedCount };
 }
 
 /**

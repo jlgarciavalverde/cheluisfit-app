@@ -2,10 +2,10 @@ import { Image } from "expo-image";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Screen, ScreenHeader } from "@/components/Screen";
-import { Button, Card, CheckRow, Chip, Icon, ListGroup, ListRow, Text, TextField, BottomSheet } from "@/components/ui";
+import { Button, Callout, Card, CheckRow, Chip, Icon, ListGroup, ListRow, Text, TextField, BottomSheet } from "@/components/ui";
 import { toast } from "@/components/ui/Toast";
 import { api, ApiError } from "@/data/api";
 import { useAuth } from "@/data/authStore";
@@ -16,7 +16,7 @@ import type { Workout } from "@/domain/strength";
 import { useStrength } from "@/data/strengthStore";
 import { addDays, dayLabel, todayKey } from "@/domain/dates";
 import { fmtDuration, fmtKm } from "@/domain/format";
-import { freeSnapshot, runSnapshot, snapshotSummary, strengthSnapshot } from "@/domain/socialSnapshot";
+import { freeSnapshot, runSnapshot, snapshotSummary, strengthSnapshot, trimRoute } from "@/domain/socialSnapshot";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -37,6 +37,19 @@ export default function PublishScreen() {
   const [uploading, setUploading] = useState(false);
   const [picker, setPicker] = useState<"run" | "strength" | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [profilePrivate, setProfilePrivate] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!token) {
+      setProfilePrivate(null);
+      return;
+    }
+    api
+      .socialMyProfile(token)
+      .then((p) => setProfilePrivate(p.isPrivate))
+      .catch(() => setProfilePrivate(null));
+  }, [token]);
 
   const cutoff = addDays(todayKey(), -30);
   const recentActivities = useMemo(() => activities.filter((a) => a.date >= cutoff).sort((a, b) => b.date.localeCompare(a.date)), [activities, cutoff]);
@@ -48,8 +61,11 @@ export default function PublishScreen() {
     return freeSnapshot();
   }, [kind, activity, workout, includeRoute]);
 
+  const routeShareable = kind === "run" && !!activity?.route && !!trimRoute(activity.route);
   const hasRoute = kind === "run" && !!activity?.route && activity.route.length > 1;
   const valid = kind === "free" || (kind === "run" && !!activity) || (kind === "strength" && !!workout);
+  const audienceHint =
+    profilePrivate === null ? null : profilePrivate ? "Lo verán tus seguidores" : "Lo verá cualquiera con cuenta";
 
   const addPhotos = async () => {
     if (photos.length >= 4) return;
@@ -85,6 +101,7 @@ export default function PublishScreen() {
   const submit = async () => {
     if (!token || !valid) return;
     setSubmitting(true);
+    setPublishError(null);
     try {
       const { id } = await api.socialPublish(token, {
         kind,
@@ -100,7 +117,9 @@ export default function PublishScreen() {
         .catch(() => {});
       router.replace({ pathname: "/social/post/[id]", params: { id } });
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : "No se pudo publicar");
+      const message = e instanceof ApiError ? e.message : "No se pudo publicar";
+      setPublishError(message);
+      toast(message);
     } finally {
       setSubmitting(false);
     }
@@ -114,6 +133,24 @@ export default function PublishScreen() {
     >
       <ScreenHeader title="Publicar" back />
       <View style={{ gap: space.lg }}>
+        {audienceHint ? (
+          <Text variant="caption" color="muted" testID="publish-audience">
+            {audienceHint}
+          </Text>
+        ) : null}
+
+        {publishError ? (
+          <Callout
+            tone="danger"
+            icon="alert-circle-outline"
+            testID="publish-error"
+            action={
+              <Button testID="publish-retry" label="Reintentar" size="sm" variant="secondary" disabled={submitting} onPress={submit} />
+            }
+          >
+            {publishError}
+          </Callout>
+        ) : null}
         <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
           <Chip testID="kind-free" label="Publicación libre" selected={kind === "free"} onPress={() => setKind("free")} />
           <Chip testID="kind-run" label="Carrera reciente" selected={kind === "run"} onPress={() => setKind("run")} />
@@ -134,7 +171,24 @@ export default function PublishScreen() {
                 {fmtKm(activity.distanceM)} km en {fmtDuration(activity.durationS)}
               </Text>
             ) : null}
-            {hasRoute ? <CheckRow label="Incluir el recorrido (recortado por los extremos)" checked={includeRoute} onChange={setIncludeRoute} /> : null}
+            {hasRoute ? (
+              routeShareable ? (
+                <CheckRow label="Incluir el recorrido (recortado por los extremos)" checked={includeRoute} onChange={setIncludeRoute} testID="include-route" />
+              ) : (
+                <View style={{ gap: space.hair }}>
+                  <CheckRow
+                    label="Incluir el recorrido (recortado por los extremos)"
+                    checked={false}
+                    onChange={() => {}}
+                    disabled
+                    testID="include-route-disabled"
+                  />
+                  <Text variant="caption" color="muted" testID="route-too-short">
+                    Esta carrera es demasiado corta para compartir el mapa con privacidad
+                  </Text>
+                </View>
+              )
+            ) : null}
           </Card>
         ) : null}
 

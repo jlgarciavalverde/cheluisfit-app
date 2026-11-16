@@ -40,15 +40,14 @@ function Shell() {
   useAutoSync();
   useNotificationsPolling();
   useAppUpdateCheck();
-  // Aviso de la sincronización (p. ej. ganó la versión de la cuenta y lo local quedó guardado en
-  // Más): se enseña una vez como toast y se limpia; la copia recuperable sigue en Más → Cuenta.
+  // Aviso de la sincronización: toast efímero al llegar; el Callout en Hoy/Más sigue hasta
+  // «Entendido» o hasta resolver las copias en Más → Cuenta.
   // Avisos del almacenamiento local (no se pudo guardar, datos ilegibles…): ver `persistSafety.ts`.
   useEffect(() => onStorageProblem((message) => toast(message)), []);
   const syncNotice = useAuth((s) => s.syncNotice);
   useEffect(() => {
     if (!syncNotice) return;
     toast(syncNotice);
-    useAuth.getState().setSyncState({ syncNotice: null });
   }, [syncNotice]);
   return (
     <>

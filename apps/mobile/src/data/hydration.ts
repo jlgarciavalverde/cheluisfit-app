@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useActiveWorkout } from "./activeWorkoutStore";
+import { useAiPanel } from "./aiPanelStore";
 import { useAuth } from "./authStore";
 import { useOnboarding } from "./onboardingStore";
 import { hydrationFailed, markHydrationFailed, onHydrationFailure } from "./persistSafety";
@@ -7,7 +8,7 @@ import { useRunning } from "./runningStore";
 import { useStrength } from "./strengthStore";
 import { useNutrition } from "./store";
 
-const stores = [useNutrition, useRunning, useStrength, useActiveWorkout, useAuth, useOnboarding];
+const stores = [useNutrition, useRunning, useStrength, useActiveWorkout, useAuth, useOnboarding, useAiPanel];
 
 /** Como mucho esto de pantalla de carga: un almacenamiento atascado no debe dejar la app en blanco. */
 const HYDRATION_TIMEOUT_MS = 5000;

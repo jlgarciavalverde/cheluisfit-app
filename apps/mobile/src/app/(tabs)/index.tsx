@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useMemo } from "react";
 import { View } from "react-native";
 import { Screen } from "@/components/Screen";
+import { SyncStatusCallout } from "@/components/SyncStatusCallout";
 import { UpdateCallout } from "@/components/UpdateCallout";
 import { KcalRing, MacroBars } from "@/components/nutrition/DaySummary";
 import { SOURCE_ICON } from "@/components/running/ActivityCard";
@@ -242,6 +243,7 @@ export default function HoyScreen() {
           ) : null}
         </View>
       </View>
+      <SyncStatusCallout />
       <UpdateCallout />
       {isWide ? (
         <View style={{ flexDirection: "row", gap: space.xl, alignItems: "flex-start" }}>

@@ -27,9 +27,16 @@ export default function ScanPhotoScreen() {
   const [back, setBack] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<{ reply: string; proposals: FoodProposal[] } | null>(null);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
-  const takeFront = async () => setFront(await captureAiPhoto());
-  const takeBack = async () => setBack(await captureAiPhoto());
+  const takeFront = async () => {
+    setAnalyzeError(null);
+    setFront(await captureAiPhoto());
+  };
+  const takeBack = async () => {
+    setAnalyzeError(null);
+    setBack(await captureAiPhoto());
+  };
 
   const analyze = async () => {
     if (!front) return;
@@ -38,11 +45,19 @@ export default function ScanPhotoScreen() {
       return;
     }
     setAnalyzing(true);
+    setAnalyzeError(null);
     try {
       const res = await api.aiProductScan(token, front, back ?? undefined);
       setResult(res);
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : "No se pudo analizar la foto");
+      const message =
+        e instanceof ApiError
+          ? e.status === 429
+            ? e.message || "Has llegado al límite de análisis con foto por hora. Prueba más tarde."
+            : e.message
+          : "No se pudo analizar la foto";
+      setAnalyzeError(message);
+      toast(message);
     } finally {
       setAnalyzing(false);
     }
@@ -96,6 +111,17 @@ export default function ScanPhotoScreen() {
         </View>
 
         <Button testID="analyze-photos" label={analyzing ? "Analizando…" : "Analizar con IA"} size="lg" fullWidth loading={analyzing} disabled={!front || analyzing} onPress={analyze} />
+
+        {analyzeError && front ? (
+          <Callout
+            tone="danger"
+            icon="alert-circle-outline"
+            testID="photo-scan-error"
+            action={<Button testID="photo-scan-retry" label="Reintentar" size="sm" variant="secondary" disabled={analyzing} onPress={analyze} />}
+          >
+            {analyzeError}
+          </Callout>
+        ) : null}
 
         {result ? (
           <View style={{ gap: space.md }} testID="photo-scan-result">

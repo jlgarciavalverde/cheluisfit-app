@@ -125,6 +125,25 @@ test.describe("Nevera", () => {
     await expect(page.getByText("Huevos camperos")).toBeVisible();
   });
 
+  test("si el análisis falla, «Reintentar» vuelve a subir la misma foto sin abrir la galería", async ({ page }) => {
+    let calls = 0;
+    await mockApi(page, {
+      ...LOGIN,
+      "/api/ai/vision/fridge": (route) => {
+        calls++;
+        if (calls === 1) return route.fulfill({ status: 502, json: { error: "http", message: "La IA no responde ahora mismo, prueba en un rato" } });
+        return route.fulfill({ json: SCAN });
+      },
+    });
+    await loginAndOpenFridge(page);
+    await scanFromLibrary(page);
+    await expect(page.getByTestId("fridge-scan-error")).toBeVisible();
+    await expect(page.getByTestId("fridge-scan-error")).toContainText("no responde");
+    await page.getByTestId("fridge-scan-retry").click();
+    await expect(page.getByText("3 alimentos en la nevera")).toBeVisible();
+    expect(calls).toBe(2);
+  });
+
   test("«¿Qué cocino?» abre el asistente y le pregunta con la nevera en el contexto", async ({ page }) => {
     let body: { messages: { content: string }[]; context: string; section: string } | null = null;
     await mockApi(page, {

@@ -28,6 +28,7 @@ export function RadioCard({
     <Pressable
       testID={testID}
       accessibilityRole="radio"
+      accessibilityLabel={title}
       aria-checked={selected}
       aria-disabled={disabled}
       accessibilityState={{ checked: selected, disabled: !!disabled }}

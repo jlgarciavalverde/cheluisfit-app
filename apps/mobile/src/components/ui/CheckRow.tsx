@@ -26,6 +26,7 @@ export function CheckRow({
     <Pressable
       testID={testID}
       accessibilityRole={kind}
+      accessibilityLabel={label}
       aria-checked={checked}
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}

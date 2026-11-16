@@ -1,7 +1,7 @@
 import { scoreText } from "@/domain/football";
 import { weekKey } from "@/domain/analysis";
 import { router } from "expo-router";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { SyncStatusCallout } from "@/components/SyncStatusCallout";
@@ -21,6 +21,7 @@ import { fmtDuration, fmtInt, fmtKm, fmtPace } from "@/domain/format";
 import { sumNutrients } from "@/domain/nutrition";
 import { avgPace, estimateTemplate, SOURCE_LABEL } from "@/domain/running";
 import { activeDayStreak } from "@/domain/streak";
+import { prefetchFridge3D } from "@/app/nevera";
 import { useBreakpoint } from "@/theme/ThemeProvider";
 import { space } from "@/theme/tokens";
 
@@ -66,6 +67,9 @@ export default function HoyScreen() {
     const dates = [...entries.map((e) => e.date), ...activities.map((a) => a.date), ...gymWorkouts.map((w) => w.date)];
     return activeDayStreak(dates, today);
   }, [entries, activities, gymWorkouts, today]);
+
+  const hasFridgeItems = useNutrition((s) => s.fridge.items.length > 0);
+  useEffect(() => { if (hasFridgeItems) prefetchFridge3D(); }, [hasFridgeItems]);
 
   const nutrition = (
     <PressableCard accessibilityLabel="Ver nutrición de hoy" onPress={() => router.navigate("/nutricion")} style={{ gap: space.lg }} testID="hoy-nutricion">

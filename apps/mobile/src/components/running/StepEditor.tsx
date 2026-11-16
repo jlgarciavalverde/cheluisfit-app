@@ -252,6 +252,7 @@ export function StepEditor({
 
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Quitar paso"
             onPress={onRemove}
             style={{ flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44 }}
           >

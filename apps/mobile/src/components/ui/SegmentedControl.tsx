@@ -52,6 +52,7 @@ export function SegmentedControl<T extends string>({
           <Pressable
             key={o.value}
             accessibilityRole={role === "radio" ? "radio" : "tab"}
+            accessibilityLabel={o.label}
             accessibilityState={role === "radio" ? { checked: on } : { selected: on }}
             aria-checked={role === "radio" ? on : undefined}
             onPress={() => {

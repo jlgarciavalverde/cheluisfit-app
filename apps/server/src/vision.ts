@@ -7,6 +7,8 @@ import { HttpError, logSafeError } from "./http";
 import type { AppConfig } from "./routes/ctx";
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+/** Modelo de Gemini con soporte de visión (imágenes). `gemini-3.5-flash-lite` NO ve fotos. */
+export const GEMINI_VISION_MODEL = process.env.GEMINI_VISION_MODEL || "gemini-2.0-flash";
 /** Respaldo con visión en Groq (desde la 0.18; el `GROQ_MODEL` del chat no ve fotos). */
 export const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
 
@@ -28,7 +30,7 @@ export function requireVisionKey(cfg: AppConfig): void {
 /** Modelos con visión por orden: Gemini y, si falla o no hay clave, el de visión de Groq. */
 function visionModels(cfg: AppConfig): { name: string; model: LanguageModel }[] {
   const out: { name: string; model: LanguageModel }[] = [];
-  if (cfg.geminiApiKey) out.push({ name: "Gemini", model: createGoogleGenerativeAI({ apiKey: cfg.geminiApiKey })(GEMINI_MODEL) });
+  if (cfg.geminiApiKey) out.push({ name: "Gemini", model: createGoogleGenerativeAI({ apiKey: cfg.geminiApiKey })(GEMINI_VISION_MODEL) });
   if (cfg.groqApiKey) out.push({ name: "Groq", model: createGroq({ apiKey: cfg.groqApiKey })(GROQ_VISION_MODEL) });
   return out;
 }

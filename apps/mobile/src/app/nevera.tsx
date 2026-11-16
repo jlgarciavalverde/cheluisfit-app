@@ -59,6 +59,7 @@ export default function FridgeScreen() {
   const [lastScan, setLastScan] = useState<{ uri: string; mode: "replace" | "add" } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [confirmStale, setConfirmStale] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const selected = fridge.items.find((i) => i.id === selectedId) ?? null;
   const days = daysSinceScan(fridge.lastScannedAt);
@@ -99,8 +100,12 @@ export default function FridgeScreen() {
         e instanceof ApiError
           ? e.status === 429
             ? e.message || "Has llegado al límite de análisis con foto por hora. Prueba más tarde."
-            : e.message
-          : "No se pudo analizar la foto";
+            : e.status === 502
+              ? "La IA no puede analizar fotos ahora mismo. Prueba en unos minutos."
+              : e.status === 0
+                ? "Sin conexión — comprueba tu WiFi o datos móviles."
+                : e.message
+          : "No se pudo analizar la foto. Prueba de nuevo.";
       setScanError(message);
       toast(message);
     } finally {
@@ -263,12 +268,7 @@ export default function FridgeScreen() {
               icon="trash-outline"
               label="Vaciar nevera"
               tone="danger"
-              onPress={() => {
-                const before = fridge;
-                clearFridge();
-                setSelectedId(null);
-                toast("Nevera vaciada", { actionLabel: "Deshacer", onAction: () => setFridge(before) });
-              }}
+              onPress={() => setConfirmClear(true)}
             />
           ) : null}
         </ActionList>
@@ -291,6 +291,22 @@ export default function FridgeScreen() {
             actionLabel: "Deshacer",
             onAction: () => setFridge(before),
           });
+        }}
+      />
+
+      <ConfirmSheet
+        visible={confirmClear}
+        onClose={() => setConfirmClear(false)}
+        title="¿Vaciar la nevera?"
+        message={`Se quitarán los ${fridge.items.length} alimentos. Podrás deshacerlo justo después.`}
+        confirmLabel="Vaciar"
+        tone="danger"
+        onConfirm={() => {
+          const before = fridge;
+          clearFridge();
+          setSelectedId(null);
+          setConfirmClear(false);
+          toast("Nevera vaciada", { actionLabel: "Deshacer", onAction: () => setFridge(before) });
         }}
       />
 

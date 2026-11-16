@@ -27,6 +27,8 @@ const AI_CHAT_TIMEOUT_MS = 45000;
 // Gemini y este responda — ese viaje de ida y vuelta puede tardar bastante más que una subida
 // normal (visto de verdad: intentos reales en el móvil que no llegaban a completarse a tiempo).
 const AI_VISION_TIMEOUT_MS = 60000;
+// Strava pide la ruta de cada actividad una a una: con varias puede tardar bastante.
+const STRAVA_SYNC_TIMEOUT_MS = 90000;
 
 const TIMEOUT_MESSAGE = "El servidor tardó demasiado en responder. Prueba otra vez en un rato.";
 const OFFLINE_MESSAGE = "Sin conexión con el servidor. Comprueba la red y prueba otra vez.";
@@ -279,7 +281,7 @@ export const api = {
   stravaSync: (token: string, since: string | null) =>
     // `until` (desde la 0.11): hasta dónde avanzar `lastStravaSync` si el servidor cortó por el tope.
     // El servidor pide la ruta de cada actividad una a una: bastante más de 8 s con varias.
-    request<{ activities: Omit<Activity, "id">[]; until?: string }>("/api/strava/sync", { method: "POST", token, body: { since }, timeoutMs: AI_VISION_TIMEOUT_MS }),
+    request<{ activities: Omit<Activity, "id">[]; until?: string }>("/api/strava/sync", { method: "POST", token, body: { since }, timeoutMs: STRAVA_SYNC_TIMEOUT_MS }),
   stravaDisconnect: (token: string) => request<{ ok: boolean }>("/api/strava/disconnect", { method: "DELETE", token }),
 
   aiChat: (token: string, section: AiSection, messages: AiMessage[], context: string) =>
